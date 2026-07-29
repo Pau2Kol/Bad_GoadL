@@ -66,11 +66,83 @@ load_lab_env() {
   # shellcheck disable=SC1090
   source "$env_file"
 
+  discover_account_context
   verify_subscription_context || return 1
+  default_lab_settings
   resolve_allowed_ip
   discover_rg_goad
   discover_rg_badzure
   discover_goad_instance_details
+}
+
+# discover_account_context — remplit SUBSCRIPTION_ID, TENANT_ID et
+# TENANT_DOMAIN par auto-détection si absentes de lab.env, depuis la
+# session az CLI active. Une valeur explicite dans lab.env reste
+# prioritaire.
+discover_account_context() {
+  if [[ -z "${SUBSCRIPTION_ID:-}" ]]; then
+    local sub_id
+    sub_id="$(az account show --query id -o tsv 2>/dev/null)"
+    if [[ -n "$sub_id" ]]; then
+      log_info "SUBSCRIPTION_ID non renseignée dans lab.env : auto-détectée = $sub_id"
+      SUBSCRIPTION_ID="$sub_id"
+      export SUBSCRIPTION_ID
+    fi
+  fi
+
+  if [[ -z "${TENANT_ID:-}" ]]; then
+    local tid
+    tid="$(az account show --query tenantId -o tsv 2>/dev/null)"
+    if [[ -n "$tid" ]]; then
+      log_info "TENANT_ID non renseignée dans lab.env : auto-détectée = $tid"
+      TENANT_ID="$tid"
+      export TENANT_ID
+    fi
+  fi
+
+  if [[ -z "${TENANT_DOMAIN:-}" ]]; then
+    local domain
+    domain="$(az rest --method get --url "https://graph.microsoft.com/v1.0/organization" --query "value[0].verifiedDomains[?isDefault]|[0].name" -o tsv 2>/dev/null)"
+    if [[ -n "$domain" ]]; then
+      log_info "TENANT_DOMAIN non renseignée dans lab.env : auto-détectée = $domain"
+      TENANT_DOMAIN="$domain"
+      export TENANT_DOMAIN
+    fi
+  fi
+}
+
+# default_lab_settings — remplit JUMPBOX_SSH_USER et les régions par des
+# valeurs par défaut sensées si absentes de lab.env : ce sont des choix de
+# configuration, pas des secrets, aucune raison d'exiger une saisie
+# manuelle. Une valeur explicite dans lab.env reste prioritaire.
+default_lab_settings() {
+  if [[ -z "${JUMPBOX_SSH_USER:-}" ]]; then
+    JUMPBOX_SSH_USER="goad"
+    export JUMPBOX_SSH_USER
+  fi
+
+  if [[ -z "${DC01_ADMIN_USER:-}" ]]; then
+    DC01_ADMIN_USER="goadmin"
+    export DC01_ADMIN_USER
+  fi
+
+  if [[ -z "${REGION_GOAD:-}" ]]; then
+    log_info "REGION_GOAD non renseignée dans lab.env : valeur par défaut = denmarkeast"
+    REGION_GOAD="denmarkeast"
+    export REGION_GOAD
+  fi
+
+  if [[ -z "${REGION_JUMPBOX:-}" ]]; then
+    log_info "REGION_JUMPBOX non renseignée dans lab.env : valeur par défaut = indiasouthcentral"
+    REGION_JUMPBOX="indiasouthcentral"
+    export REGION_JUMPBOX
+  fi
+
+  if [[ -z "${REGION_BADZURE:-}" ]]; then
+    log_info "REGION_BADZURE non renseignée dans lab.env : valeur par défaut = westus"
+    REGION_BADZURE="westus"
+    export REGION_BADZURE
+  fi
 }
 
 # repo_root_dir — chemin du dossier parent de goad-badzure-hybrid/, où vivent
