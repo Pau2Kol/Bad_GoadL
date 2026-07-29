@@ -41,7 +41,7 @@ data "azuread_service_principal" "microsoft_graph" {
 }
 
 data "azuread_service_principal" "exchange_online" {
-  display_name = "Office 365 Exchange Online"
+  display_name = "Microsoft Graph"
 }
 
 resource "azuread_user" "users" {

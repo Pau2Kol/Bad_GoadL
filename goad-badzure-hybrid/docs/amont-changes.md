@@ -41,6 +41,34 @@ dans une autre région (`indiasouthcentral`, cf. `scripts/10-migrate-jumpbox.sh`
 le laisser dans `denmarkeast` dépasserait le quota Azure Free Trial
 (4 vCPU/région).
 
+## Service principal Exchange Online (`BadZure/terraform/main.tf`)
+
+**Champ modifié** : `display_name` du data source
+`azuread_service_principal.exchange_online`.
+
+```hcl
+# avant
+display_name = "Office 365 Exchange Online"
+
+# après
+display_name = "Microsoft Graph"
+```
+
+### Pourquoi
+
+Ce data source est évalué à chaque `terraform apply`, même quand aucun
+attack path actif n'utilise réellement les permissions Exchange (il n'est
+référencé conditionnellement que si `api_type == "exchange"` sur une
+assignation). Sur ce tenant, "Office 365 Exchange Online" n'existe pas
+comme service principal (Exchange Online non licencié dans ce tenant), ce
+qui fait échouer `terraform apply` avec "Service principal not found",
+avant même d'atteindre un attack path qui en aurait besoin.
+
+"Microsoft Graph" existe dans tous les tenants Entra ID : la valeur n'est
+consommée que si un attack path avec `api_type = "exchange"` est
+réellement configuré (non testé dans ce lab), auquel cas revenir à
+"Office 365 Exchange Online" sur un tenant qui l'a réellement provisionné.
+
 ## Non appliqué : région explicite pour BadZure
 
 Idée envisagée : fixer explicitement `location: westus` dans
