@@ -74,18 +74,6 @@ sous `workspace/`) et `<IP publique actuelle du jumpbox>` par sa vraie IP
 que `terraform output` pourrait renvoyer si le jumpbox a déjà été migré
 (voir le problème suivant).
 
-## `terraform apply` échoue sur un conflit de quota en créant dc01
-
-**Symptôme** : `OperationNotAllowed: exceeding approved Total Regional Cores
-quota` en créant `goad-vm-dc01`.
-
-**Cause** : sur un déploiement neuf, dc02, srv02 et le jumpbox saturent déjà
-la région avant que dc01 (plus gros, `Standard_B2s`) ne soit créé. Pourquoi
-dc01 a besoin de cette taille : voir `docs/amont-changes.md`.
-
-**Solution** : lancer `scripts/10-migrate-jumpbox.sh` pour libérer le quota,
-puis relancer `terraform apply -auto-approve` dans le même dossier.
-
 ## Un nouveau `terraform apply` recrée le jumpbox après sa migration
 
 **Symptôme** : après avoir migré le jumpbox (`10-migrate-jumpbox.sh`), un

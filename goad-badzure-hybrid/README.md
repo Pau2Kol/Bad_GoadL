@@ -51,7 +51,7 @@ cd ../goad-badzure-hybrid && ./scripts/00-deploy.sh goad
 ./scripts/00-deploy.sh link
 ```
 
-Si l'étape 2 échoue (prompt bloqué, conflit de quota), voir
+Si l'étape 2 échoue (prompt Terraform bloqué), voir
 `docs/troubleshooting.md`.
 
 **4. Étape manuelle.** D'abord, se connecter une fois sur

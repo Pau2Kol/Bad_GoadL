@@ -37,10 +37,13 @@ source "${SCRIPT_DIR}/50-goad-gpo-unblock.sh"
 # deploy_goad — lance goad.py directement, attaché au terminal courant
 # (jamais de stdin pipé : c'est ce qui évite le bug de prompt bloquant entre
 # goad.py et son propre appel à terraform, documenté dans
-# docs/troubleshooting.md). N'automatise pas les deux contournements connus
-# (conflit de quota, désynchronisation du state Terraform après migration du
-# jumpbox) : en cas d'échec, le message pointe vers le document plutôt que
-# de retenter automatiquement contre de l'infrastructure réelle.
+# docs/troubleshooting.md). Sur un premier déploiement, dc01 (le plus gros
+# gabarit, cf. docs/amont-changes.md) échoue systématiquement pour conflit de
+# quota tant que la jumpbox n'a pas été déplacée hors de la région des DC :
+# ce cas précis est détecté et corrigé automatiquement. Les autres échecs
+# (prompt Terraform bloqué notamment) restent des contournements manuels :
+# le message d'erreur pointe vers docs/troubleshooting.md plutôt que de
+# retenter automatiquement contre de l'infrastructure réelle.
 deploy_goad() {
   local goad_dir="${GOAD_DIR:-${SCRIPT_DIR}/../../GOAD}"
   local instance="${GOAD_INSTANCE_ID:-}"
@@ -55,6 +58,31 @@ deploy_goad() {
     return 0
   fi
 
+  run_goad_install "$goad_dir" "$instance"
+  local result=$?
+
+  if [[ $result -ne 0 ]]; then
+    discover_rg_goad
+    if [[ -n "${RG_GOAD:-}" ]] && vm_exists "ubuntu-jumpbox" "$RG_GOAD" && ! vm_exists "goad-vm-dc01" "$RG_GOAD"; then
+      log_info "dc01 manquant, jumpbox présente : conflit de quota connu (cf. docs/amont-changes.md). Migration de la jumpbox puis reprise ciblée."
+      if recover_from_dc01_quota_conflict "$goad_dir" "$instance"; then
+        result=0
+      fi
+    fi
+  fi
+
+  if [[ $result -ne 0 ]]; then
+    log_error "Échec du déploiement GOAD-Light. Si c'est un prompt Terraform bloqué, voir docs/troubleshooting.md."
+    return 1
+  fi
+
+  log_info "GOAD-Light déployé."
+}
+
+# run_goad_install <goad_dir> <instance> — un essai de goad.py -t install,
+# attaché au terminal courant.
+run_goad_install() {
+  local goad_dir="$1" instance="$2"
   log_info "Lancement de goad.py (interactif, attaché au terminal courant)."
   (
     cd "$goad_dir" || exit 1
@@ -64,14 +92,71 @@ deploy_goad() {
       python3 goad.py -t install -l GOAD-Light -p azure
     fi
   )
-  local result=$?
+}
 
-  if [[ $result -ne 0 ]]; then
-    log_error "Échec du déploiement GOAD-Light. Si c'est un prompt Terraform bloqué ou un conflit de quota, voir docs/troubleshooting.md."
+# recover_from_dc01_quota_conflict <goad_dir> <instance> — jumpbox+dc02+srv02
+# saturent le quota régional avant que dc01 ne soit créé (cf.
+# docs/amont-changes.md). La migration de la jumpbox libère le vCPU
+# nécessaire, mais relancer un `goad.py -t install` complet referait un apply
+# Terraform intégral : celui-ci verrait la jumpbox migrée (déplacée hors de
+# son contrôle par des commandes az directes) comme manquante et tenterait de
+# la recréer dans la région des DC, annulant la migration et resaturant le
+# quota (cf. docs/troubleshooting.md, "Un nouveau terraform apply recrée le
+# jumpbox après sa migration"). On cible donc l'apply sur dc01 uniquement,
+# puis on reprend le provisioning Ansible directement (sans repasser par
+# do_provide), avec le même mécanisme que le contournement documenté pour un
+# prompt Terraform bloqué.
+recover_from_dc01_quota_conflict() {
+  local goad_dir="$1" instance="$2"
+
+  migrate_jumpbox || return 1
+
+  local instance_dir="${instance:+$goad_dir/workspace/$instance}"
+  [[ -z "$instance_dir" ]] && instance_dir="$(find_goad_workspace_dir)"
+  if [[ -z "$instance_dir" || ! -d "$instance_dir/provider" ]]; then
+    log_error "Dossier d'instance GOAD introuvable pour reprendre le déploiement de dc01."
+    return 1
+  fi
+  instance="$(basename "$instance_dir")"
+
+  log_info "Apply Terraform ciblé sur dc01."
+  if ! (cd "$instance_dir/provider" && terraform apply -auto-approve -target='azurerm_windows_virtual_machine.goad-vm["dc01"]'); then
+    log_error "L'apply ciblé sur dc01 a échoué."
     return 1
   fi
 
-  log_info "GOAD-Light déployé."
+  local jumpbox_ip
+  jumpbox_ip="$(az vm show -d --name ubuntu-jumpbox --resource-group "$RG_GOAD" --query publicIps -o tsv)"
+  if [[ -z "$jumpbox_ip" ]]; then
+    log_error "IP publique de la jumpbox introuvable après migration."
+    return 1
+  fi
+
+  log_info "Reprise du provisioning Ansible (dc01 créé, sans repasser par l'apply Terraform complet)."
+  (
+    cd "$goad_dir" || exit 1
+    python3 - "$instance" "$jumpbox_ip" <<'PYEOF'
+import sys, os, importlib.util
+
+goad_dir = os.path.abspath(".")
+sys.path.insert(0, goad_dir)
+spec = importlib.util.spec_from_file_location("goad_cli", os.path.join(goad_dir, "goad.py"))
+goad_cli = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(goad_cli)
+
+instance, jumpbox_ip = sys.argv[1], sys.argv[2]
+sys.argv = ["goad.py", "-i", instance, "-l", "GOAD-Light", "-p", "azure"]
+args = goad_cli.parse_args()
+g = goad_cli.Goad(args)
+g.do_load(instance)
+
+provisioner = g.lab_manager.get_current_instance_provisioner()
+provisioner.prepare_jumpbox(jumpbox_ip)
+if not provisioner.run():
+    sys.exit(1)
+g.lab_manager.get_current_instance().set_status(goad_cli.READY)
+PYEOF
+  )
 }
 
 # deploy_link — B1 à B4/B6 : relie GOAD et BadZure, s'arrête avant le
