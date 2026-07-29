@@ -66,7 +66,34 @@ load_lab_env() {
   # shellcheck disable=SC1090
   source "$env_file"
 
+  verify_subscription_context || return 1
   resolve_allowed_ip
+}
+
+# verify_subscription_context — garde-fou : si $SUBSCRIPTION_ID est
+# renseignée dans lab.env, vérifie que la session az CLI active pointe bien
+# vers cet abonnement avant de laisser un script continuer. Rien n'utilisait
+# cette variable auparavant (déclarée dans lab.env.example mais jamais lue) :
+# un opérateur dont la session az pointait vers le mauvais abonnement
+# n'aurait eu aucun signal avant qu'un script y écrive réellement. Laissée
+# vide, la vérification est simplement ignorée (comportement inchangé).
+verify_subscription_context() {
+  if [[ -z "${SUBSCRIPTION_ID:-}" ]]; then
+    return 0
+  fi
+
+  local active_subscription
+  active_subscription="$(az account show --query id -o tsv 2>/dev/null)"
+
+  if [[ -z "$active_subscription" ]]; then
+    log_error "Impossible de déterminer l'abonnement az actif (az account show a échoué) : vérifier 'az login'."
+    return 1
+  fi
+
+  if [[ "$active_subscription" != "$SUBSCRIPTION_ID" ]]; then
+    log_error "Abonnement az actif ($active_subscription) différent de SUBSCRIPTION_ID dans lab.env ($SUBSCRIPTION_ID) : az account set --subscription $SUBSCRIPTION_ID avant de continuer."
+    return 1
+  fi
 }
 
 # detect_public_ip — IP publique sortante de la machine opérateur (celle qui

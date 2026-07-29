@@ -92,6 +92,14 @@ Redéploiement complet, du vierge au lab hybride fonctionnel :
 7. `scripts/40-prepare-entra-connect.sh` : SP app-only et sync-admin.
 8. `scripts/30-goad-hardening-fix.sh` : bloque l'héritage GPO et applique le
    crypto fix sur dc01.
+
+   **Note sur la numérotation** : `40` s'exécute avant `30` dans cet ordre.
+   Les préfixes numériques suivent l'ordre de test historique du projet, pas
+   une dépendance stricte entre ces deux scripts : `30` agit uniquement sur
+   dc01 en local (WinRM), `40` agit uniquement sur le tenant Entra ID
+   (Graph), ils sont indépendants l'un de l'autre et peuvent être exécutés
+   dans l'autre sens sans conséquence. Les deux doivent simplement être
+   terminés avant l'étape 9.
 9. **[Opérateur, manuel]** Installation et wizard Entra Connect avec
    sync-admin (cf. `docs/manual-steps.md`).
 10. **[Opérateur]** Vérifier la synchro (`powershell/check-adsync.ps1`, user

@@ -17,10 +17,14 @@
 # utilisent donc la session az courante (plus simple, déjà validé) ; seules
 # les ÉCRITURES exigent GRAPH_CLIENT_ID/GRAPH_CLIENT_SECRET.
 #
-# À VÉRIFIER (spec §4/B6, explicitement laissé à l'opérateur) : si aucun SP
-# app-only n'existe encore pour l'automatisation Graph, sa création initiale
-# est un prérequis MANUEL (portail), documenté dans docs/manual-steps.md — ce
-# script ne tente jamais de créer ce SP lui-même.
+# Le SP app-only requis pour l'automatisation Graph n'est PLUS un prérequis
+# manuel : si GRAPH_CLIENT_ID/GRAPH_CLIENT_SECRET sont absents de
+# config/lab.env, ce script bootstrappe lui-même l'app registration, le
+# service principal, les permissions Graph applicatives (consentement admin
+# inclus) et un nouveau secret, via ensure_graph_automation_bootstrap
+# (appelée en tête de prepare_entra_connect). Action à fort impact (permissions
+# tenant-wide) : voir docs/manual-steps.md pour le détail exact de ce que ça
+# crée et régénère.
 #
 # Sourçable : `source scripts/40-prepare-entra-connect.sh` ne fait que
 # définir les fonctions ci-dessous ; rien n'est exécuté avant l'appel
