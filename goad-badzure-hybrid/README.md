@@ -43,11 +43,12 @@ export BADZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
 export BADZURE_DOMAIN=$(az rest --method get --url "https://graph.microsoft.com/v1.0/organization" --query "value[0].verifiedDomains[?isDefault]|[0].name" -o tsv)
 cd ../BadZure && python3 BadZure.py build
 
-# 2. Déployer GOAD-Light (VMs + configuration du domaine)
+# 2. Déployer GOAD-Light (VMs + configuration du domaine, jumpbox directement
+#    dans sa propre région)
 cd ../goad-badzure-hybrid && ./scripts/00-deploy.sh goad
 
-# 3. Relier GOAD et BadZure : migration du jumpbox, peering réseau, règles
-#    NSG, création du compte sync-admin, hardening de dc01
+# 3. Relier GOAD et BadZure : peering réseau, règles NSG, création du compte
+#    sync-admin, hardening de dc01
 ./scripts/00-deploy.sh link
 ```
 

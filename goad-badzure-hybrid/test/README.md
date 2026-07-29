@@ -42,7 +42,7 @@ qui tournera réellement en production — pas une réplique.
 
 | Script | Testable sur fixtures ? | Raison |
 |---|---|---|
-| `10-migrate-jumpbox.sh` | Oui | Ne teste que snapshot/copie cross-région/recréation de VM Linux, les fixtures suffisent |
+| `10-migrate-jumpbox.sh` | Oui | Ne teste que snapshot/copie cross-région/recréation de VM Linux, les fixtures suffisent. Plus appelé par l'orchestrateur (la jumpbox est créée directement dans sa région dès le déploiement, cf. `docs/amont-changes.md`), gardé comme utilitaire générique |
 | `20-peer-networks.sh` | Oui | Ne teste que la liaison de VNets |
 | `21-nsg-rules.sh` | Oui | Ne teste que des règles NSG |
 | `30-goad-hardening-fix.sh` (blocage) | Non | Nécessite un vrai DC Windows durci par GOAD |

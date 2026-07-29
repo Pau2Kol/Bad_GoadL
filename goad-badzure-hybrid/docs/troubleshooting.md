@@ -70,28 +70,7 @@ python3 run_provisioning.py
 
 Remplacer `<instance>` par l'identifiant d'instance GOAD (nom du dossier
 sous `workspace/`) et `<IP publique actuelle du jumpbox>` par sa vraie IP
-(`az vm show --name ubuntu-jumpbox -d --query publicIps -o tsv`), pas celle
-que `terraform output` pourrait renvoyer si le jumpbox a déjà été migré
-(voir le problème suivant).
-
-## Un nouveau `terraform apply` recrée le jumpbox après sa migration
-
-**Symptôme** : après avoir migré le jumpbox (`10-migrate-jumpbox.sh`), un
-`terraform apply` ultérieur essaie de le recréer dans la région GOAD
-d'origine.
-
-**Cause** : Terraform ne sait pas que le jumpbox a été déplacé en dehors de
-son contrôle (la migration se fait par des commandes Azure directes, pas via
-Terraform).
-
-**Solution** : restreindre l'apply aux ressources réellement nécessaires,
-par exemple :
-
-```bash
-terraform apply -auto-approve -target='azurerm_windows_virtual_machine.goad-vm["dc01"]'
-```
-
-Adapter le nom de ressource ciblé à la VM réellement concernée.
+(`az vm show --name ubuntu-jumpbox -d --query publicIps -o tsv`).
 
 ## Un script échoue sur "Variable(s) manquante(s)" alors que le lab est déployé
 

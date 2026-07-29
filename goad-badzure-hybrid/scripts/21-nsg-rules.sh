@@ -3,8 +3,9 @@
 # - WinRM 5985 (subnet jumpbox -> dc01) sur le NSG GOAD : désactivée par
 #   défaut (ENABLE_WINRM_NSG_RULE=true pour l'activer), le trafic passe déjà
 #   par AllowVnetInBound.
-# - Restriction SSH (NSG jumpbox + NSG GOAD) : remplace la source "*" par
-#   $ALLOWED_IP.
+# - Restriction SSH sur le NSG du subnet des DC : remplace la source "*" par
+#   $ALLOWED_IP (le NSG de la jumpbox est déjà restreint à $ALLOWED_IP dès sa
+#   création par Terraform, cf. GOAD/template/provider/azure/jumpbox.tf).
 # - Restriction RDP temporaire éventuelle à $ALLOWED_IP, si une telle règle
 #   existe déjà.
 #
@@ -51,15 +52,13 @@ ensure_nsg_rule() {
     --source-address-prefixes "$source_prefix"
 }
 
-# restrict_ssh_to_allowed_ip <ssh_source_ip> <goad_nsg> <goad_rg> <jumpbox_nsg> <jumpbox_rg>
-# — remplace la source "*" des règles SSH existantes par $ssh_source_ip. Le
-# jumpbox étant le seul point d'entrée public d'un lab volontairement
-# vulnérable, cette restriction est jugée importante.
+# restrict_ssh_to_allowed_ip <ssh_source_ip> <goad_nsg> <goad_rg>
+# — remplace la source "*" de la règle SSH du subnet des DC par
+# $ssh_source_ip.
 restrict_ssh_to_allowed_ip() {
-  local ssh_source_ip="$1" goad_nsg="$2" goad_rg="$3" jumpbox_nsg="$4" jumpbox_rg="$5"
+  local ssh_source_ip="$1" goad_nsg="$2" goad_rg="$3"
 
   ensure_nsg_rule "$goad_nsg" "$goad_rg" "AllowSSHInboundOnly" 100 22 "$ssh_source_ip"
-  ensure_nsg_rule "$jumpbox_nsg" "$jumpbox_rg" "AllowSSHInbound" 100 22 "$ssh_source_ip"
 }
 
 # add_winrm_rule <goad_nsg> <goad_rg> <jumpbox_subnet_cidr> — règle WinRM
@@ -87,23 +86,19 @@ restrict_rdp_if_present() {
     --source-address-prefixes "$ssh_source_ip"
 }
 
-# apply_nsg_hardening — orchestration complète. Noms de NSG par défaut
-# alignés sur la convention GOAD observée ("{{lab_name}}-subnet-nsg", stable —
-# cf. GOAD/template/provider/azure/network.tf) et sur les noms réels
-# post-migration du jumpbox (cf. scripts/10-migrate-jumpbox.sh).
+# apply_nsg_hardening — orchestration complète. Nom de NSG par défaut aligné
+# sur la convention GOAD observée ("{{lab_name}}-subnet-nsg", stable — cf.
+# GOAD/template/provider/azure/network.tf). CIDR du subnet jumpbox aligné sur
+# GOAD/template/provider/azure/jumpbox.tf (10.201.0.0/16).
 apply_nsg_hardening() {
   require_vars RG_GOAD ALLOWED_IP || return 1
 
   local goad_rg="$RG_GOAD"
-  # Le jumpbox partage le RG de GOAD (cf. scripts/20-peer-networks.sh).
-  local jumpbox_rg="$goad_rg"
-
   local goad_nsg="${GOAD_NSG_NAME:-GOAD-Light-subnet-nsg}"
-  local jumpbox_nsg="${JUMPBOX_NSG_NAME:-jumpbox-nsg-c}"
   local jumpbox_subnet_cidr="${JUMPBOX_SUBNET_CIDR:-10.201.0.0/16}"
   local rdp_rule_name="${GOAD_RDP_RULE_NAME:-rdp_temporaire}"
 
-  restrict_ssh_to_allowed_ip "$ALLOWED_IP" "$goad_nsg" "$goad_rg" "$jumpbox_nsg" "$jumpbox_rg"
+  restrict_ssh_to_allowed_ip "$ALLOWED_IP" "$goad_nsg" "$goad_rg"
 
   if [[ "${ENABLE_WINRM_NSG_RULE:-false}" == "true" ]]; then
     add_winrm_rule "$goad_nsg" "$goad_rg" "$jumpbox_subnet_cidr"

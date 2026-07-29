@@ -69,6 +69,45 @@ consommée que si un attack path avec `api_type = "exchange"` est
 réellement configuré (non testé dans ce lab), auquel cas revenir à
 "Office 365 Exchange Online" sur un tenant qui l'a réellement provisionné.
 
+## Jumpbox déployée directement dans sa propre région (`GOAD/template/provider/azure/jumpbox.tf`, `variables.tf`)
+
+**Champs ajoutés** : variables `jumpbox_location` et `jumpbox_allowed_ip`
+(`variables.tf`), VNet/subnet/NSG dédiés au jumpbox + peering bidirectionnel
+avec le VNet des DC (`jumpbox.tf`). Les ressources jumpbox (VM, NIC, IP
+publique) utilisent désormais `var.jumpbox_location` au lieu de
+`azurerm_resource_group.resource_group.location`.
+
+### Pourquoi
+
+dc01 (`Standard_B2s`, 2 vCPU) + dc02 + srv02 (`Standard_B1ms`, 1 vCPU
+chacune) = 4 vCPU, tout le quota Azure Free Trial de la région des DC (cf.
+section précédente). La jumpbox (1 vCPU) ne peut donc pas coexister, même
+brièvement, dans la même région : un `terraform apply` qui tenterait de créer
+les 4 VM ensemble échouerait systématiquement sur dc01 (dernière créée) avec
+un conflit de quota.
+
+Avant ce changement, la jumpbox naissait dans la région des DC (comme le
+prévoit le template GOAD standard) puis était déplacée après coup vers une
+autre région (`scripts/10-migrate-jumpbox.sh`, snapshot cross-région + NSG +
+VNet + peering recréés à la main via `az`). Cette approche ne résout rien
+pour le tout premier déploiement : au moment du premier `terraform apply`,
+goad.py essaie de créer les 4 VM en une fois, donc le conflit de quota se
+produit de toute façon avant que la migration ne puisse intervenir.
+
+Ce changement place directement la jumpbox dans `var.jumpbox_location` (=
+`$REGION_JUMPBOX`, exportée en `TF_VAR_jumpbox_location` par
+`scripts/00-deploy.sh` avant d'appeler `goad.py`, cf. `deploy_goad`), avec son
+propre VNet/subnet peeré au VNet des DC dès la création : le quota de la
+région des DC n'a plus jamais à supporter que 4 vCPU (dc01+dc02+srv02), la
+jumpbox comptant sur le quota de sa propre région. Le peering est nécessaire
+dès cette étape car le provisioning Ansible de `goad.py` (juste après
+l'apply) se connecte depuis la jumpbox vers dc01 en WinRM.
+
+`scripts/10-migrate-jumpbox.sh` n'est plus appelé par l'orchestrateur mais
+reste dans le dépôt (toujours testé via les fixtures, cf. `test/README.md`) :
+utilitaire générique de migration cross-région d'une VM Linux, potentiellement
+réutile pour d'autres besoins.
+
 ## Non appliqué : région explicite pour BadZure
 
 Idée envisagée : fixer explicitement `location: westus` dans

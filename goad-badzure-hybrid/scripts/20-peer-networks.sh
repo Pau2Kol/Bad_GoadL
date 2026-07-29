@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# 20-peer-networks.sh — établit les peerings VNet bidirectionnels
-# BadZure ($REGION_BADZURE) <-> GOAD ($REGION_GOAD) et GOAD <-> jumpbox
-# ($REGION_JUMPBOX), avec --allow-vnet-access et --allow-forwarded-traffic
-# (requis pour le pivoting depuis le jumpbox).
+# 20-peer-networks.sh — établit les peerings VNet bidirectionnels BadZure
+# ($REGION_BADZURE) <-> GOAD ($REGION_GOAD), avec --allow-vnet-access et
+# --allow-forwarded-traffic (requis pour le pivoting depuis le jumpbox).
+#
+# Le peering GOAD <-> jumpbox est créé directement par Terraform à la
+# création de la jumpbox (cf. GOAD/template/provider/azure/jumpbox.tf), pas
+# ici.
 #
 # Pas de peering jumpbox <-> BadZure (non transitif, non requis — décision
 # figée).
@@ -60,43 +63,33 @@ verify_peering_connected() {
   log_info "Peering $peering_name sur $local_vnet : Connected."
 }
 
-# peer_networks — orchestration complète. Les noms de VNet ont un
-# défaut correspondant à la convention observée sur cette infra :
-# - GOAD/jumpbox : dérivés du "lab_name" GOAD-Light, stable (pas de suffixe
-#   aléatoire, cf. GOAD/template/provider/azure/network.tf).
-# - BadZure : dérivé de $RG_BADZURE lui-même. À la différence de GOAD, le nom
-#   du resource group BadZure est choisi aléatoirement par
-#   generate_resource_groups (BadZure/src/entity_generator.py) à chaque
-#   déploiement — donc PAS de nom de VNet en dur ici : le nom réel est
-#   "${RG_BADZURE}-vnet" (cf. BadZure/terraform/main.tf, ressource
-#   azurerm_virtual_network.vm_vnets : name = "${resource_group_name}-vnet").
+# peer_networks — orchestration complète. Nom de VNet GOAD dérivé du
+# "lab_name" GOAD-Light, stable (pas de suffixe aléatoire, cf.
+# GOAD/template/provider/azure/network.tf). Nom de VNet BadZure dérivé de
+# $RG_BADZURE lui-même : à la différence de GOAD, le nom du resource group
+# BadZure est choisi aléatoirement par generate_resource_groups
+# (BadZure/src/entity_generator.py) à chaque déploiement — donc pas de nom en
+# dur ici : le nom réel est "${RG_BADZURE}-vnet" (cf.
+# BadZure/terraform/main.tf, ressource azurerm_virtual_network.vm_vnets :
+# name = "${resource_group_name}-vnet").
 peer_networks() {
   require_vars RG_GOAD RG_BADZURE || return 1
 
   local goad_rg="$RG_GOAD"
   local badzure_rg="$RG_BADZURE"
-  # Le jumpbox vit dans le même resource group que le reste de GOAD (seule la
-  # région diffère) : GOAD n'a qu'un RG pour toutes ses régions.
-  local jumpbox_rg="$goad_rg"
 
   local goad_vnet="${GOAD_VNET_NAME:-GOAD-Light-virtual-network}"
-  local jumpbox_vnet="${JUMPBOX_VNET_NAME:-vnet-jumpbox-c}"
   local badzure_vnet="${BADZURE_VNET_NAME:-${badzure_rg}-vnet}"
 
-  local goad_vnet_id badzure_vnet_id jumpbox_vnet_id
+  local goad_vnet_id badzure_vnet_id
   goad_vnet_id="$(az network vnet show --name "$goad_vnet" --resource-group "$goad_rg" --query id -o tsv)"
   badzure_vnet_id="$(az network vnet show --name "$badzure_vnet" --resource-group "$badzure_rg" --query id -o tsv)"
-  jumpbox_vnet_id="$(az network vnet show --name "$jumpbox_vnet" --resource-group "$jumpbox_rg" --query id -o tsv)"
 
   create_peering "peering-badzure-to-goad" "$badzure_vnet" "$badzure_rg" "$goad_vnet_id"
   create_peering "peering-goad-to-badzure" "$goad_vnet" "$goad_rg" "$badzure_vnet_id"
-  create_peering "peer-a-to-c" "$goad_vnet" "$goad_rg" "$jumpbox_vnet_id"
-  create_peering "peer-c-to-a" "$jumpbox_vnet" "$jumpbox_rg" "$goad_vnet_id"
 
   verify_peering_connected "peering-badzure-to-goad" "$badzure_vnet" "$badzure_rg"
   verify_peering_connected "peering-goad-to-badzure" "$goad_vnet" "$goad_rg"
-  verify_peering_connected "peer-a-to-c" "$goad_vnet" "$goad_rg"
-  verify_peering_connected "peer-c-to-a" "$jumpbox_vnet" "$jumpbox_rg"
 }
 
 main() {
