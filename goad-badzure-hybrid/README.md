@@ -36,7 +36,11 @@ prioritaire sur l'auto-détection.
 Quatre commandes, une étape manuelle au milieu :
 
 ```bash
-# 1. Peupler le tenant avec BadZure
+# 1. Peupler le tenant avec BadZure (badzure.yml n'a pas besoin d'être rempli :
+#    ces variables d'environnement sont prioritaires sur sa config)
+export BADZURE_TENANT_ID=$(az account show --query tenantId -o tsv)
+export BADZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+export BADZURE_DOMAIN=$(az rest --method get --url "https://graph.microsoft.com/v1.0/organization" --query "value[0].verifiedDomains[?isDefault]|[0].name" -o tsv)
 cd ../BadZure && python3 BadZure.py build
 
 # 2. Déployer GOAD-Light (VMs + configuration du domaine)

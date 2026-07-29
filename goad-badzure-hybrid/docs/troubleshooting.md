@@ -3,6 +3,24 @@
 Rencontrés lors d'un redéploiement complet from scratch. Symptôme, cause,
 solution.
 
+## `BadZure.py build` échoue avec "tenant_id is required"
+
+**Symptôme** : `[!] tenant_id is required. Set BADZURE_TENANT_ID
+environment variable or specify 'tenant_id' in the YAML configuration.`
+
+**Cause** : `badzure.yml` n'est pas rempli, et les variables d'environnement
+`BADZURE_TENANT_ID`/`BADZURE_SUBSCRIPTION_ID`/`BADZURE_DOMAIN` n'ont pas été
+exportées avant de lancer `BadZure.py build`.
+
+**Solution** : exporter ces trois variables depuis la session az active
+avant de relancer (voir étape 1 de `README.md`) :
+
+```bash
+export BADZURE_TENANT_ID=$(az account show --query tenantId -o tsv)
+export BADZURE_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+export BADZURE_DOMAIN=$(az rest --method get --url "https://graph.microsoft.com/v1.0/organization" --query "value[0].verifiedDomains[?isDefault]|[0].name" -o tsv)
+```
+
 ## `goad.py -t install` reste bloqué sur une confirmation Terraform
 
 **Symptôme** : le terminal affiche `Do you want to perform these actions?
