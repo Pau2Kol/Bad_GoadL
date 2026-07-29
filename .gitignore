@@ -1,11 +1,5 @@
-# Claude Code, réglages locaux personnels, non partagés avec l'équipe
-.claude/settings.local.json
 
-# Anciens dépôts git de BadZure/GOAD (absorbés comme dossiers normaux dans ce
-# repo) : sauvegardés en .git.bak, ne doivent pas être trackés ici (objets
-# d'historique volumineux et redondants).
+.claude/settings.local.json
 BadZure/.git.bak/
 GOAD/.git.bak/
-
-# Notes personnelles de l'opérateur, pas destinées au dépôt public.
 instructions.md
