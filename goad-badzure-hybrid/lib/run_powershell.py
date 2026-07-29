@@ -47,10 +47,9 @@ def parse_args(argv=None):
 
 
 def build_invocation(remote_path, script_args):
-    # À VÉRIFIER : pas d'échappement des guillemets/backticks dans les
-    # arguments — suffisant pour les arguments actuels (-Block, -Unblock,
-    # sans espaces ni caractères spéciaux). À revoir si des arguments plus
-    # complexes sont introduits.
+    # Pas d'échappement des guillemets/backticks : suffisant pour les
+    # arguments actuels (-Block, -Unblock), à revoir si des arguments avec
+    # espaces ou caractères spéciaux sont introduits.
     quoted_args = " ".join(script_args)
     return f"& '{remote_path}' {quoted_args}".strip()
 

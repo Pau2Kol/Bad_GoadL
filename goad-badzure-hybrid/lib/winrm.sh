@@ -11,8 +11,13 @@
 
 # Chemin vers run_powershell.py, résolu relativement à CE fichier (pas au
 # script appelant) : correct quel que soit le script qui source lib/winrm.sh.
+# Garde contre un double sourcing (ex. scripts/00-deploy.sh source à la fois
+# ce fichier directement et des scripts qui le sourcent eux-mêmes) : sans
+# elle, la seconde déclaration readonly échoue.
 WINRM_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly RUN_POWERSHELL_PY="${WINRM_LIB_DIR}/run_powershell.py"
+if [[ -z "${RUN_POWERSHELL_PY:-}" ]]; then
+  readonly RUN_POWERSHELL_PY="${WINRM_LIB_DIR}/run_powershell.py"
+fi
 
 # get_jumpbox_public_ip <vm_name> <rg> — lecture pure, indépendante de $DRY_RUN.
 get_jumpbox_public_ip() {

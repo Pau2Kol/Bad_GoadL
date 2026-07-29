@@ -1,21 +1,19 @@
 #!/usr/bin/env bash
-# 40-prepare-entra-connect.sh — B6 : préparation Entra Connect.
+# 40-prepare-entra-connect.sh — préparation Entra Connect.
 # - Vérifie/crée le compte de synchronisation cloud-only
-#   sync-admin@$TENANT_DOMAIN (userType Member, JAMAIS un compte MSA — cause
-#   racine documentée du fix ABA, cf. spec §4/B6 et docs/manual-steps.md).
+#   sync-admin@$TENANT_DOMAIN (userType Member, jamais un compte MSA : cause
+#   racine documentée du fix ABA, cf. docs/manual-steps.md).
 # - Vérifie/attribue le rôle Hybrid Identity Administrator à ce compte.
 # - Nettoie les apps ConnectSyncProvisioning_* en doublon (conflit de
 #   certificat documenté par Microsoft).
 #
-# Contrainte d'authentification (spec §4/B6) : une politique de Conditional
-# Access du tenant (erreur 530035) bloque tout login interactif/device-code
-# depuis une machine non enregistrée. Toute ÉCRITURE Graph de ce script passe
-# donc par un jeton d'application app-only (client credentials, GRAPH_CLIENT_ID
-# + GRAPH_CLIENT_SECRET), jamais par la session az cli interactive courante —
-# même si, dans cet environnement précis, les LECTURES via la session
-# interactive fonctionnent sans erreur (vérifié). Les LECTURES de ce script
-# utilisent donc la session az courante (plus simple, déjà validé) ; seules
-# les ÉCRITURES exigent GRAPH_CLIENT_ID/GRAPH_CLIENT_SECRET.
+# Contrainte d'authentification : une politique de Conditional Access du
+# tenant (erreur 530035) bloque tout login interactif/device-code depuis une
+# machine non enregistrée. Toute ÉCRITURE Graph de ce script passe donc par
+# un jeton d'application app-only (client credentials, GRAPH_CLIENT_ID +
+# GRAPH_CLIENT_SECRET), jamais par la session az cli interactive courante.
+# Les LECTURES, elles, utilisent la session az courante (fonctionne sans
+# jeton app-only).
 #
 # Le SP app-only requis pour l'automatisation Graph n'est PLUS un prérequis
 # manuel : si GRAPH_CLIENT_ID/GRAPH_CLIENT_SECRET sont absents de
@@ -30,25 +28,19 @@
 # définir les fonctions ci-dessous ; rien n'est exécuté avant l'appel
 # explicite de prepare_entra_connect (ou d'une fonction individuelle).
 #
-# Non testable sur fixtures (nécessite le vrai tenant + Conditional Access,
-# cf. spec §10/test/README.md). Les fonctions de LECTURE ont été validées en
-# conditions réelles (lecture seule) contre le tenant réel de ce lab ; le
-# chemin d'ÉCRITURE (création sync-admin, activation/attribution de rôle,
-# suppression d'app) n'a PAS été exercé pour de vrai : aucun SP app-only
-# identifié dans ce tenant au moment de l'écriture de ce script, et
-# sync-admin/le rôle/l'app ConnectSyncProvisioning existent déjà tous les
-# trois correctement dans ce lab (rien à créer ici concrètement).
+# Non testable sur fixtures (nécessite le vrai tenant et la Conditional
+# Access réelle, cf. test/README.md).
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../lib/common.sh disable=SC1091
 source "${SCRIPT_DIR}/../lib/common.sh"
 
 # Constante universelle Microsoft (identique dans tous les tenants Entra ID),
-# PAS un secret. Confirmée en direct sur le tenant de ce lab via
-# `GET /v1.0/directoryRoles?$filter=displayName eq 'Hybrid Identity Administrator'`
-# (champ roleTemplateId).
-readonly HYBRID_IDENTITY_ADMIN_ROLE_TEMPLATE_ID="8ac3fc64-6eca-42ea-9e69-59f4c7b60eb2"
-readonly HYBRID_IDENTITY_ADMIN_ROLE_NAME="Hybrid Identity Administrator"
+# pas un secret : roleTemplateId du rôle Hybrid Identity Administrator.
+if [[ -z "${HYBRID_IDENTITY_ADMIN_ROLE_TEMPLATE_ID:-}" ]]; then
+  readonly HYBRID_IDENTITY_ADMIN_ROLE_TEMPLATE_ID="8ac3fc64-6eca-42ea-9e69-59f4c7b60eb2"
+  readonly HYBRID_IDENTITY_ADMIN_ROLE_NAME="Hybrid Identity Administrator"
+fi
 
 # ---------------------------------------------------------------------------
 # Lecture (session az cli courante — fonctionne sans SP app-only, vérifié)
@@ -89,23 +81,24 @@ graph_app_credentials_available() {
 }
 
 # ---------------------------------------------------------------------------
-# Bootstrap du SP app-only (session az cli interactive — pas de jeton
-# app-only, chicken-and-egg : c'est justement le SP qu'on crée). Constaté en
-# conditions réelles (test dynamique) : `az ad app create`/`az ad sp
-# create`/`az ad app permission add`/`admin-consent` fonctionnent tous via
-# la session interactive sans erreur 530035 — contrairement à la création
-# d'utilisateur/l'attribution de rôle, qui elles exigent le jeton app-only.
-# Seul ce bootstrap ponctuel utilise donc la session interactive pour une
-# écriture ; tout le reste de ce fichier (ensure_sync_admin,
-# cleanup_duplicate_connectsync_apps) continue d'exiger un jeton app-only.
+# Bootstrap du SP app-only : utilise la session az cli interactive (pas de
+# jeton app-only possible ici, chicken-and-egg, c'est justement le SP qu'on
+# crée). `az ad app create`/`az ad sp create`/`az ad app permission
+# add`/`admin-consent` fonctionnent via la session interactive sans erreur
+# 530035, contrairement à la création d'utilisateur et l'attribution de
+# rôle, qui exigent le jeton app-only. Seul ce bootstrap utilise donc la
+# session interactive pour une écriture ; le reste de ce fichier
+# (ensure_sync_admin, cleanup_duplicate_connectsync_apps) exige un jeton
+# app-only.
 # ---------------------------------------------------------------------------
 
-# Constantes universelles Microsoft Graph (identiques dans tous les tenants),
-# PAS des secrets. Confirmées en direct sur le tenant de ce lab via
-# `GET /servicePrincipals/{graphSpId}/appRoles` plutôt que reprises de mémoire.
-readonly GRAPH_RESOURCE_APP_ID="00000003-0000-0000-c000-000000000000"
-readonly GRAPH_ROLE_USER_READWRITE_ALL="741f803b-c850-494e-b5df-cde7c675a1ca"
-readonly GRAPH_ROLE_ROLEMANAGEMENT_READWRITE_DIRECTORY="9e3f62cf-ca93-4989-b6ce-bf83c28f9fe8"
+# Constantes Microsoft Graph, identiques dans tous les tenants, pas des
+# secrets.
+if [[ -z "${GRAPH_RESOURCE_APP_ID:-}" ]]; then
+  readonly GRAPH_RESOURCE_APP_ID="00000003-0000-0000-c000-000000000000"
+  readonly GRAPH_ROLE_USER_READWRITE_ALL="741f803b-c850-494e-b5df-cde7c675a1ca"
+  readonly GRAPH_ROLE_ROLEMANAGEMENT_READWRITE_DIRECTORY="9e3f62cf-ca93-4989-b6ce-bf83c28f9fe8"
+fi
 
 # ensure_graph_automation_app <display_name> — idempotent, renvoie l'App ID
 # (client id) sur stdout.
@@ -325,9 +318,8 @@ delete_app() {
 # ---------------------------------------------------------------------------
 
 # ensure_sync_admin — idempotent : ne crée/n'attribue le rôle que si
-# nécessaire. Ne corrige PAS un compte existant mal configuré (userType
-# Guest, désactivé...) — signale seulement, cf. spec (vérifier avant d'agir,
-# ne pas trancher seul en cas d'écart).
+# nécessaire. Ne corrige pas un compte existant mal configuré (userType
+# Guest, désactivé...), signale seulement.
 ensure_sync_admin() {
   require_vars TENANT_ID TENANT_DOMAIN || return 1
 
@@ -366,7 +358,7 @@ ensure_sync_admin() {
   log_info "sync-admin@${TENANT_DOMAIN} introuvable, création nécessaire."
 
   if ! graph_app_credentials_available; then
-    log_error "GRAPH_CLIENT_ID/GRAPH_CLIENT_SECRET non renseignés (config/lab.env) : impossible de créer sync-admin via un SP app-only, comme l'exige la politique Conditional Access du tenant (erreur 530035 sur toute auth interactive). Cf. docs/manual-steps.md pour créer ce SP manuellement une fois via le portail (prérequis explicitement laissé à l'opérateur, spec §9)."
+    log_error "GRAPH_CLIENT_ID/GRAPH_CLIENT_SECRET non renseignés (config/lab.env) : impossible de créer sync-admin via un SP app-only, comme l'exige la politique Conditional Access du tenant (erreur 530035 sur toute auth interactive). Cf. docs/manual-steps.md."
     return 1
   fi
 
@@ -422,7 +414,7 @@ cleanup_duplicate_connectsync_apps() {
   done <<< "$apps"
 }
 
-# prepare_entra_connect — orchestration complète de B6.
+# prepare_entra_connect — orchestration complète.
 prepare_entra_connect() {
   require_vars TENANT_ID TENANT_DOMAIN || return 1
 

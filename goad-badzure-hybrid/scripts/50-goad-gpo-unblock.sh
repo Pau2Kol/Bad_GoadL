@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 50-goad-gpo-unblock.sh — B5 (partie déblocage) : débloque l'héritage GPO sur
+# 50-goad-gpo-unblock.sh — débloque l'héritage GPO sur
 # l'OU Domain Controllers (powershell/gpo-inheritance.ps1 -Unblock, qui
 # enchaîne lui-même gpupdate /force), UNIQUEMENT après validation manuelle que
 # la synchronisation Entra Connect est stable (cf. docs/manual-steps.md,
@@ -11,7 +11,7 @@
 # durcissement GPO qui vient d'être réactivé ne doit pas recasser le crypto
 # fix — c'est exactement le bug d'origine que ce projet corrige).
 #
-# NON TESTABLE SUR FIXTURES (cf. spec §10 / test/README.md) : nécessite un
+# NON TESTABLE SUR FIXTURES (cf. test/README.md) : nécessite un
 # vrai DC Windows durci par GOAD, avec une synchro Entra Connect réellement
 # en cours. Ne pas exécuter sans validation explicite préalable de
 # l'opérateur (cf. scripts/30-goad-hardening-fix.sh pour le même
@@ -28,7 +28,7 @@ source "${SCRIPT_DIR}/../lib/common.sh"
 # shellcheck source=../lib/winrm.sh disable=SC1091
 source "${SCRIPT_DIR}/../lib/winrm.sh"
 
-# unblock_gpo_inheritance — orchestration complète de B5 (déblocage).
+# unblock_gpo_inheritance — orchestration complète du déblocage.
 unblock_gpo_inheritance() {
   require_vars RG_GOAD DC01_PRIVATE_IP DC01_ADMIN_USER DC01_ADMIN_PASSWORD JUMPBOX_SSH_USER JUMPBOX_SSH_KEY_PATH || return 1
 

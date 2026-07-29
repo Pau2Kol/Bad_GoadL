@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 10-migrate-jumpbox.sh — B1 : migration cross-région du jumpbox GOAD
+# 10-migrate-jumpbox.sh — migration cross-région du jumpbox GOAD
 # (région des DC -> $REGION_JUMPBOX). Snapshot incrémental du disque OS, copie
 # cross-région, recréation de la VM dans la région cible (nouveau VNet non
 # chevauchant + NSG explicite), suppression de l'ancienne VM et nettoyage des
@@ -8,13 +8,12 @@
 # Idempotent : si le jumpbox est déjà dans $REGION_JUMPBOX, ne fait rien.
 # Nécessaire uniquement pour un redéploiement from-scratch où GOAD a créé le
 # jumpbox dans la région des DC (comportement par défaut du template GOAD :
-# le jumpbox naît dans le même VNet que les DC, cf.
-# goad-badzure-extension-points.md §3).
+# le jumpbox naît dans le même VNet que les DC).
 #
 # Sourçable : `source scripts/10-migrate-jumpbox.sh` ne fait que définir les
 # fonctions ci-dessous ; rien n'est exécuté avant l'appel explicite de
 # migrate_jumpbox (ou d'une fonction individuelle, pour les tests sur
-# fixtures — cf. test/README.md, spec §10).
+# fixtures, cf. test/README.md).
 #
 # Toutes les commandes d'écriture passent par run_cmd (lib/common.sh), qui
 # respecte --dry-run.
@@ -27,8 +26,6 @@ source "${SCRIPT_DIR}/../lib/common.sh"
 # incrémental du disque source, dans la région source. --incremental true dès
 # la création est requis : sans ça, --copy-start échouera ensuite
 # (CreateOption.CopyStart n'est supporté que pour un snapshot incrémental).
-# À VÉRIFIER : syntaxe exacte de --incremental (valeur booléenne explicite vs.
-# drapeau simple) selon la version d'az cli installée (az snapshot create --help).
 snapshot_source_disk() {
   local disk_id="$1" snapshot_name="$2" rg="$3" region="$4"
 
@@ -108,7 +105,7 @@ create_disk_from_snapshot() {
 
 # create_target_network <vnet_name> <subnet_name> <rg> <region> <vnet_cidr> <subnet_cidr>
 # CIDR non chevauchant avec le lab GOAD (10.200.10.0/24) : 10.201.0.0/16 par
-# défaut, subnet 10.201.1.0/24 (cf. spec §4/B1).
+# défaut, subnet 10.201.1.0/24.
 create_target_network() {
   local vnet_name="$1" subnet_name="$2" rg="$3" region="$4" vnet_cidr="$5" subnet_cidr="$6"
 
@@ -316,11 +313,12 @@ check_stale_migration_orphans() {
   fi
 }
 
-# migrate_jumpbox — orchestration complète de B1. Toutes les valeurs de
-# ressources ont un défaut correspondant à la convention de nommage GOAD
-# observée (stable, non aléatoire — cf. GOAD/template/provider/azure/jumpbox.tf
-# et infra-inventory.md), mais restent surchargeables par variable
-# d'environnement (utile pour les fixtures de test, spec §10).
+# migrate_jumpbox — orchestration complète de la migration. Toutes les
+# valeurs de ressources ont un défaut correspondant à la convention de
+# nommage GOAD observée (stable, non aléatoire, cf.
+# GOAD/template/provider/azure/jumpbox.tf), mais restent surchargeables par
+# variable d'environnement (utile pour les fixtures de test, cf.
+# test/README.md).
 migrate_jumpbox() {
   require_vars RG_GOAD REGION_JUMPBOX ALLOWED_IP || return 1
 
@@ -372,26 +370,17 @@ migrate_jumpbox() {
   create_target_public_ip "$new_pip_name" "$rg" "$REGION_JUMPBOX" || return 1
   create_target_nic "$new_nic_name" "$rg" "$REGION_JUMPBOX" "$new_vnet_name" "$new_subnet_name" "$new_pip_name" || return 1
 
-  # À VÉRIFIER / écart avec la spec (§4/B1) : la spec liste "6. créer la VM"
-  # avant "7. supprimer l'ancienne VM". Impossible tel quel ici : le nom cible
-  # ($vm_name, "ubuntu-jumpbox" par défaut) est identique au nom d'origine —
-  # GOAD nomme toujours le jumpbox ainsi (cf. jumpbox.tf, nom en dur, non
-  # templaté) — et Azure interdit deux ressources de même nom dans le même
-  # resource group, même dans des régions différentes. L'ancienne VM est donc
-  # supprimée AVANT la création de la nouvelle. Le reste de la préparation
-  # (réseau, NSG, IP, NIC) est fait avant la suppression pour minimiser la
-  # fenêtre de coupure. À confirmer avec l'opérateur que c'est bien l'ordre
-  # suivi lors de la migration manuelle initiale.
+  # L'ancienne VM doit être supprimée avant de créer la nouvelle : GOAD nomme
+  # toujours le jumpbox "ubuntu-jumpbox" (nom en dur, non templaté), et Azure
+  # interdit deux ressources de même nom dans le même resource group, même
+  # dans des régions différentes. Le reste (réseau, NSG, IP, NIC) est préparé
+  # avant la suppression pour minimiser la coupure.
   #
-  # Constaté en conditions réelles (test dynamique) : create_vm_from_disk peut
-  # échouer (ex. QuotaExceeded/SkuNotAvailable côté Azure) APRÈS que
-  # delete_old_vm a déjà supprimé l'ancienne VM — le jumpbox n'existe alors
-  # nulle part, mais le disque copié ($new_disk_name) est intact et
-  # attachable. Gate explicite ci-dessous : si create_vm_from_disk échoue, on
-  # s'arrête avec un message de récupération clair et on NE LANCE PAS
-  # cleanup_orphans (qui supprimerait le disque d'origine, la dernière
-  # référence utilisable si un retry manuel était tenté sur l'ancien disque
-  # plutôt que sur le nouveau).
+  # Si create_vm_from_disk échoue après que delete_old_vm a réussi (quota,
+  # SKU indisponible), le jumpbox n'existe plus nulle part mais le disque
+  # copié ($new_disk_name) reste intact et attachable : on s'arrête alors
+  # avec un message de récupération clair, sans lancer cleanup_orphans (qui
+  # supprimerait le disque d'origine, la seule autre référence utilisable).
   delete_old_vm "$vm_name" "$rg" "$REGION_JUMPBOX" || return 1
 
   if ! create_vm_from_disk "$vm_name" "$rg" "$REGION_JUMPBOX" "$new_disk_name" "$new_nic_name"; then

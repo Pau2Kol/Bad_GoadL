@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# 21-nsg-rules.sh — B3 : règles NSG post-déploiement.
-# - WinRM 5985 (subnet jumpbox -> dc01) sur le NSG GOAD : le trafic passe déjà
-#   par AllowVnetInBound, cette règle explicite sécurise le canal pypsrp
-#   contre une future règle de blocage. À VÉRIFIER avec l'opérateur si jugée
-#   utile ou superflue selon la politique de sécurité voulue (spec §9).
+# 21-nsg-rules.sh — règles NSG post-déploiement.
+# - WinRM 5985 (subnet jumpbox -> dc01) sur le NSG GOAD : désactivée par
+#   défaut (ENABLE_WINRM_NSG_RULE=true pour l'activer), le trafic passe déjà
+#   par AllowVnetInBound.
 # - Restriction SSH (NSG jumpbox + NSG GOAD) : remplace la source "*" par
 #   $ALLOWED_IP.
 # - Restriction RDP temporaire éventuelle à $ALLOWED_IP, si une telle règle
@@ -12,7 +11,7 @@
 # Sourçable : `source scripts/21-nsg-rules.sh` ne fait que définir les
 # fonctions ci-dessous ; rien n'est exécuté avant l'appel explicite de
 # apply_nsg_hardening (ou d'une fonction individuelle, pour les tests sur
-# fixtures — cf. test/README.md, spec §10).
+# fixtures — cf. test/README.md).
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../lib/common.sh disable=SC1091
@@ -55,8 +54,7 @@ ensure_nsg_rule() {
 # restrict_ssh_to_allowed_ip <ssh_source_ip> <goad_nsg> <goad_rg> <jumpbox_nsg> <jumpbox_rg>
 # — remplace la source "*" des règles SSH existantes par $ssh_source_ip. Le
 # jumpbox étant le seul point d'entrée public d'un lab volontairement
-# vulnérable, cette restriction est jugée importante (cf. anomalie #4/#5,
-# infra-inventory.md).
+# vulnérable, cette restriction est jugée importante.
 restrict_ssh_to_allowed_ip() {
   local ssh_source_ip="$1" goad_nsg="$2" goad_rg="$3" jumpbox_nsg="$4" jumpbox_rg="$5"
 
@@ -64,10 +62,8 @@ restrict_ssh_to_allowed_ip() {
   ensure_nsg_rule "$jumpbox_nsg" "$jumpbox_rg" "AllowSSHInbound" 100 22 "$ssh_source_ip"
 }
 
-# add_winrm_rule <goad_nsg> <goad_rg> <jumpbox_subnet_cidr> — À VÉRIFIER : la
-# spec (§4/B3, §9) laisse explicitement à l'opérateur le choix de juger cette
-# règle utile ou superflue (le trafic passe déjà par AllowVnetInBound).
-# Ajoutée ici par prudence ; à retirer si jugée non nécessaire.
+# add_winrm_rule <goad_nsg> <goad_rg> <jumpbox_subnet_cidr> — règle WinRM
+# explicite, désactivée par défaut (cf. ENABLE_WINRM_NSG_RULE).
 add_winrm_rule() {
   local goad_nsg="$1" goad_rg="$2" jumpbox_subnet_cidr="$3"
 
@@ -91,7 +87,7 @@ restrict_rdp_if_present() {
     --source-address-prefixes "$ssh_source_ip"
 }
 
-# apply_nsg_hardening — orchestration complète de B3. Noms de NSG par défaut
+# apply_nsg_hardening — orchestration complète. Noms de NSG par défaut
 # alignés sur la convention GOAD observée ("{{lab_name}}-subnet-nsg", stable —
 # cf. GOAD/template/provider/azure/network.tf) et sur les noms réels
 # post-migration du jumpbox (cf. scripts/10-migrate-jumpbox.sh).
@@ -109,14 +105,10 @@ apply_nsg_hardening() {
 
   restrict_ssh_to_allowed_ip "$ALLOWED_IP" "$goad_nsg" "$goad_rg" "$jumpbox_nsg" "$jumpbox_rg"
 
-  # Décision opérateur (2026-07-28, cf. CHANGELOG.md) : la règle implicite
-  # AllowVnetInBound suffit, pas de règle WinRM explicite par défaut. La
-  # fonction add_winrm_rule reste disponible/testable ; ENABLE_WINRM_NSG_RULE=true
-  # l'active sans toucher au code.
   if [[ "${ENABLE_WINRM_NSG_RULE:-false}" == "true" ]]; then
     add_winrm_rule "$goad_nsg" "$goad_rg" "$jumpbox_subnet_cidr"
   else
-    log_info "Règle WinRM explicite non créée (ENABLE_WINRM_NSG_RULE=false, décision opérateur)."
+    log_info "Règle WinRM explicite non créée (ENABLE_WINRM_NSG_RULE=false)."
   fi
 
   restrict_rdp_if_present "$ALLOWED_IP" "$goad_nsg" "$goad_rg" "$rdp_rule_name"

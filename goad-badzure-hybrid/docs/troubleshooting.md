@@ -1,8 +1,7 @@
 # Problèmes connus au déploiement de GOAD-Light
 
-Rencontrés lors d'un redéploiement complet from scratch (2026-07-28/29).
-Détail technique complet dans `CHANGELOG.md` si besoin ; ici, juste le
-symptôme et la solution.
+Rencontrés lors d'un redéploiement complet from scratch. Symptôme, cause,
+solution.
 
 ## `goad.py -t install` reste bloqué sur une confirmation Terraform
 
@@ -63,7 +62,8 @@ que `terraform output` pourrait renvoyer si le jumpbox a déjà été migré
 quota` en créant `goad-vm-dc01`.
 
 **Cause** : sur un déploiement neuf, dc02, srv02 et le jumpbox saturent déjà
-la région avant que dc01 (plus gros, `Standard_B2s`) ne soit créé.
+la région avant que dc01 (plus gros, `Standard_B2s`) ne soit créé. Pourquoi
+dc01 a besoin de cette taille : voir `docs/amont-changes.md`.
 
 **Solution** : lancer `scripts/10-migrate-jumpbox.sh` pour libérer le quota,
 puis relancer `terraform apply -auto-approve` dans le même dossier.

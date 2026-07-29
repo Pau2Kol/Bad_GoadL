@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# 20-peer-networks.sh — B2 : établit les peerings VNet bidirectionnels
+# 20-peer-networks.sh — établit les peerings VNet bidirectionnels
 # BadZure ($REGION_BADZURE) <-> GOAD ($REGION_GOAD) et GOAD <-> jumpbox
 # ($REGION_JUMPBOX), avec --allow-vnet-access et --allow-forwarded-traffic
 # (requis pour le pivoting depuis le jumpbox).
 #
 # Pas de peering jumpbox <-> BadZure (non transitif, non requis — décision
-# figée, cf. spec §4/B2).
+# figée).
 #
 # Pas de règle NSG supplémentaire nécessaire pour le trafic inter-VNet peeré :
 # la règle par défaut AllowVnetInBound (tag VirtualNetwork) couvre déjà les
@@ -14,7 +14,7 @@
 # Sourçable : `source scripts/20-peer-networks.sh` ne fait que définir les
 # fonctions ci-dessous ; rien n'est exécuté avant l'appel explicite de
 # peer_networks (ou de create_peering isolément, pour les tests sur fixtures
-# — cf. test/README.md, spec §10).
+# — cf. test/README.md).
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../lib/common.sh disable=SC1091
@@ -60,7 +60,7 @@ verify_peering_connected() {
   log_info "Peering $peering_name sur $local_vnet : Connected."
 }
 
-# peer_networks — orchestration complète de B2. Les noms de VNet ont un
+# peer_networks — orchestration complète. Les noms de VNet ont un
 # défaut correspondant à la convention observée sur cette infra :
 # - GOAD/jumpbox : dérivés du "lab_name" GOAD-Light, stable (pas de suffixe
 #   aléatoire, cf. GOAD/template/provider/azure/network.tf).
@@ -76,8 +76,7 @@ peer_networks() {
   local goad_rg="$RG_GOAD"
   local badzure_rg="$RG_BADZURE"
   # Le jumpbox vit dans le même resource group que le reste de GOAD (seule la
-  # région diffère) : GOAD n'a qu'un RG pour toutes ses régions, cf.
-  # infra-inventory.md §10 (azure.sh cible par RG, indépendant de la région).
+  # région diffère) : GOAD n'a qu'un RG pour toutes ses régions.
   local jumpbox_rg="$goad_rg"
 
   local goad_vnet="${GOAD_VNET_NAME:-GOAD-Light-virtual-network}"

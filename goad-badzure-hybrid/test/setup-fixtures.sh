@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # setup-fixtures.sh — monte un environnement Azure factice minimal (~2 min)
-# pour tester B1/B2/B3 sans dépendre du vrai GOAD/BadZure (spec §10, Niveau 3).
+# pour tester les scripts réseau/infra sans dépendre du vrai GOAD/BadZure.
 #
 # Crée, dans UN SEUL resource group dédié (facilite un teardown propre) :
 # - 2 VNets vides (juste VNet + subnet, CIDR non chevauchants) dans 2 régions
@@ -11,12 +11,12 @@
 # génériques.
 #
 # Réutilise directement create_target_network (scripts/10-migrate-jumpbox.sh)
-# plutôt que de dupliquer la création de VNet : conforme à la spec §10, "les
-# fixtures utilisent les mêmes fonctions que les scripts réels".
+# plutôt que de dupliquer la création de VNet : les fixtures utilisent les
+# mêmes fonctions que les scripts réels.
 #
 # Régions par défaut : $REGION_JUMPBOX/$REGION_BADZURE si déjà exportés
 # (config/lab.env), sinon indiasouthcentral/westus — PAS denmarkeast, qui est
-# saturé (4/4 vCPU, cf. infra-inventory.md) et ferait échouer la création de
+# saturé (4/4 vCPU) et ferait échouer la création de
 # VM. Resource group séparé de $RG_GOAD/$RG_BADZURE : ne touche jamais à
 # l'infra réelle.
 #
@@ -34,11 +34,10 @@ source "${TEST_DIR}/../scripts/10-migrate-jumpbox.sh"
 # rejoué plusieurs fois dans le même shell (ex. session interactive de debug)
 # sans erreur "variable en lecture seule" sur ce deuxième sourcing.
 #
-# Surchargeables (${VAR:-défaut}) : constaté en conditions réelles que
-# Standard_B1s peut être temporairement indisponible (SkuNotAvailable, quota
-# de capacité Azure ponctuel, distinct du quota vCPU d'abonnement) dans une
-# région donnée à un instant donné — permet de relancer avec une autre taille
-# sans modifier le script.
+# Surchargeables (${VAR:-défaut}) : Standard_B1s peut être temporairement
+# indisponible dans une région donnée (SkuNotAvailable, quota de capacité
+# Azure ponctuel, distinct du quota vCPU d'abonnement), d'où la possibilité
+# de relancer avec une autre taille sans modifier le script.
 FIXTURE_VM_IMAGE="${FIXTURE_VM_IMAGE:-Canonical:0001-com-ubuntu-server-jammy:22_04-lts-gen2:latest}"
 FIXTURE_VM_SIZE="${FIXTURE_VM_SIZE:-Standard_B1s}"
 
@@ -69,17 +68,10 @@ create_fixture_nic() {
 
 # ensure_fixture_ssh_key — génère (une seule fois par run) une paire de clés
 # SSH éphémère dédiée aux fixtures, dans un répertoire temporaire hors du
-# repo. Trouvé en testant ce lot pour de vrai (spec §10, étape 4) :
-# `az vm create --generate-ssh-keys` réutilise silencieusement une clé privée
-# déjà présente à l'emplacement par défaut (~/.ssh/id_rsa) plutôt que d'en
-# générer une nouvelle si le fichier existe déjà — et échoue platement
-# ("Valid PEM but no BEGIN/END delimiters for a private key found") si ce
-# fichier existe mais n'est pas dans un format que az cli sait parser (vécu en
-# conditions réelles sur cet environnement). Indépendamment de ce bug,
-# provisionner la clé privée personnelle de l'opérateur sur une VM jetable
-# n'est de toute façon pas souhaitable : on génère donc systématiquement une
-# clé dédiée, à usage unique, via --ssh-key-value plutôt que
-# --generate-ssh-keys.
+# repo, via --ssh-key-value plutôt que --generate-ssh-keys : ce dernier
+# réutilise silencieusement une clé privée déjà présente à l'emplacement par
+# défaut (~/.ssh/id_rsa), ce qui provisionnerait la clé personnelle de
+# l'opérateur sur une VM jetable.
 ensure_fixture_ssh_key() {
   if [[ -n "${FIXTURE_SSH_PUBLIC_KEY_PATH:-}" ]]; then
     return 0

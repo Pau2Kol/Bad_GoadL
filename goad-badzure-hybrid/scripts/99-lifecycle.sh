@@ -1,27 +1,20 @@
 #!/usr/bin/env bash
-# 99-lifecycle.sh — remplaçant de azure.sh (racine du repo). Gère le
-# start/stop courant du lab complet, sur les 3 régions (ciblage par RG + nom,
-# indépendant de la région, comme azure.sh — un seul RG GOAD couvre
-# denmarkeast ET indiasouthcentral).
+# 99-lifecycle.sh — gère le start/stop courant du lab complet, sur les 3
+# régions (ciblage par RG + nom, indépendant de la région : un seul RG GOAD
+# couvre denmarkeast ET indiasouthcentral).
 #
-# Différences avec azure.sh (cf. infra-inventory.md §10, anomalie #8) :
-# - `stop` utilise `az vm deallocate` (déjà le cas dans azure.sh) — conservé :
-#   `deallocate` arrête la facturation compute (contrairement à un simple
-#   `stop` OS qui laisse la VM allouée et facturée). À NOTER (constaté en
-#   conditions réelles, test dynamique) : sur cet abonnement Free Trial,
-#   `deallocate` n'a PAS libéré le quota "Total Regional Cores" d'une région
-#   tant que la VM existe encore (même désallouée) — seule la SUPPRESSION
-#   complète de la VM (`az vm delete`) a libéré ce quota lors du test. La
-#   prémisse "deallocate libère le quota" qui sous-tend la répartition 3
-#   régions de ce projet ne s'est donc pas vérifiée pour un scénario de
-#   création d'une VM SUPPLÉMENTAIRE dans une région déjà occupée par des VM
-#   désallouées — à garder en tête pour tout redéploiement futur nécessitant
-#   plus de capacité que prévu dans une région donnée.
-# - `stop`/`start` couvrent maintenant aussi les ressources cloud BadZure
-#   (Function App, Logic App) qu'azure.sh ignorait totalement — elles
-#   continuaient de consommer même "lab éteint" côté VMs. Cosmos DB
-#   serverless n'a pas de notion start/stop : listé pour information
-#   uniquement, jamais d'action dessus.
+# Points notables :
+# - `stop` utilise `az vm deallocate` : arrête la facturation compute
+#   (contrairement à un simple `stop` OS, qui laisse la VM allouée et
+#   facturée). Sur un abonnement Free Trial, `deallocate` ne libère pas le
+#   quota "Total Regional Cores" d'une région tant que la VM existe encore :
+#   seule la suppression complète (`az vm delete`) libère ce quota. À garder
+#   en tête si un redéploiement futur a besoin de plus de capacité dans une
+#   région déjà occupée par des VM désallouées.
+# - `stop`/`start` couvrent aussi les ressources cloud BadZure (Function
+#   App, Logic App), qui sinon continuent de consommer même "lab éteint"
+#   côté VMs. Cosmos DB serverless n'a pas de notion start/stop : listé pour
+#   information uniquement, jamais d'action dessus.
 # - Ordre de démarrage : DC (dc01, dc02) d'abord, puis srv02, puis jumpbox,
 #   puis les ressources BadZure (VM + Function App + Logic App).
 # - Les VM/Function App/Logic App BadZure sont découvertes dynamiquement
@@ -104,7 +97,7 @@ logicapp_set_state() {
 }
 
 # note_cosmos_db_accounts <rg> — Cosmos DB serverless n'a pas de start/stop
-# applicable (spec §6) : listé pour information uniquement, aucune action.
+# applicable : listé pour information uniquement, aucune action.
 note_cosmos_db_accounts() {
   local rg="$1"
   local accounts

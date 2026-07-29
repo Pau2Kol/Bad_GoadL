@@ -3,12 +3,15 @@
     check-adsync.ps1 — vérifie l'état de la synchronisation Entra Connect sur dc01.
 
 .DESCRIPTION
-    Script de diagnostic pur (aucune modification d'état). Utilisé à deux
-    moments (spec §4/§5) :
+    Script de diagnostic pur (aucune modification d'état). Utilisé à trois
+    moments :
     1. Manuellement par l'opérateur après le wizard ABA, pour confirmer que
        la synchro initiale est stable avant de lancer
        scripts/50-goad-gpo-unblock.sh.
-    2. Automatiquement par scripts/50-goad-gpo-unblock.sh lui-même, juste
+    2. Automatiquement par scripts/00-deploy.sh finish, juste avant
+       d'appeler le déblocage GPO : refuse de continuer si la synchro
+       n'est pas confirmée stable.
+    3. Automatiquement par scripts/50-goad-gpo-unblock.sh lui-même, juste
        après le déblocage de l'héritage GPO, pour confirmer que le
        durcissement GOAD n'a pas recassé le crypto fix (cause du bug
        d'origine).

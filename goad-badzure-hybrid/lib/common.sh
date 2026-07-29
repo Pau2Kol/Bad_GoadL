@@ -70,13 +70,10 @@ load_lab_env() {
   resolve_allowed_ip
 }
 
-# verify_subscription_context — garde-fou : si $SUBSCRIPTION_ID est
-# renseignée dans lab.env, vérifie que la session az CLI active pointe bien
-# vers cet abonnement avant de laisser un script continuer. Rien n'utilisait
-# cette variable auparavant (déclarée dans lab.env.example mais jamais lue) :
-# un opérateur dont la session az pointait vers le mauvais abonnement
-# n'aurait eu aucun signal avant qu'un script y écrive réellement. Laissée
-# vide, la vérification est simplement ignorée (comportement inchangé).
+# verify_subscription_context — si $SUBSCRIPTION_ID est renseignée dans
+# lab.env, vérifie que la session az CLI active pointe bien vers cet
+# abonnement avant de laisser un script continuer. Laissée vide, la
+# vérification est ignorée.
 verify_subscription_context() {
   if [[ -z "${SUBSCRIPTION_ID:-}" ]]; then
     return 0
@@ -96,25 +93,19 @@ verify_subscription_context() {
   fi
 }
 
-# detect_public_ip — IP publique sortante de la machine opérateur (celle qui
-# exécute ces scripts), via le même endpoint que BadZure/src/utils.py
-# get_public_ip() (api64.ipify.org injoignable dans ce sandbox précis,
-# ifconfig.me/ip confirmé fonctionnel). Utilisée uniquement comme fallback
-# quand $ALLOWED_IP n'est pas explicitement renseignée dans lab.env — cf.
-# resolve_allowed_ip.
+# detect_public_ip — IP publique sortante de la machine opérateur, via le
+# même endpoint que BadZure/src/utils.py get_public_ip(). Fallback utilisé
+# par resolve_allowed_ip quand $ALLOWED_IP n'est pas renseignée.
 detect_public_ip() {
   curl -sf -4 --max-time 5 https://ifconfig.me/ip 2>/dev/null | tr -d '[:space:]'
 }
 
 # resolve_allowed_ip — remplit $ALLOWED_IP par auto-détection si absente de
-# lab.env, plutôt que d'exiger une valeur figée à maintenir à la main.
-# Constaté en conditions réelles : l'IP sortante de la machine opérateur
-# change (reset d'environnement, itinérance réseau) et une valeur figée dans
-# lab.env finit par bloquer silencieusement SSH (règle NSG restrictive vers
-# une IP obsolète, timeout de connexion sans message d'erreur explicite côté
-# Azure). Une valeur explicite dans lab.env reste prioritaire (utile pour
-# épingler une IP stable, ex. agent CI) : l'auto-détection n'intervient que
-# si $ALLOWED_IP est vide après le chargement de lab.env.
+# lab.env. L'IP sortante de la machine opérateur change dans le temps ; une
+# valeur figée finit par bloquer SSH silencieusement (règle NSG pointant
+# vers une IP obsolète, timeout sans message d'erreur explicite). Une valeur
+# explicite dans lab.env reste prioritaire (utile pour épingler une IP
+# stable, ex. agent CI).
 resolve_allowed_ip() {
   if [[ -n "${ALLOWED_IP:-}" ]]; then
     return 0
@@ -134,14 +125,10 @@ resolve_allowed_ip() {
 
 # redact_secrets <chaîne> — masque les motifs de secret connus (jetons Bearer,
 # champs "password" JSON, client_secret=...) avant de logger une commande.
-# Ne touche jamais aux arguments réellement exécutés (uniquement la
-# représentation affichée) — cf. run_cmd. Constaté en conditions réelles
-# (Lot 4, test dynamique B6) : un appel `az rest --headers
-# "Authorization=Bearer ${token}" --body '{"password": "..."}'` loguait le
-# jeton d'accès réel ET le mot de passe temporaire en clair via `log_info
-# "[EXEC] $*"` — même catégorie de fuite déjà corrigée pour WINRM_PASSWORD
-# (variable d'environnement), mais qui touche ici toute commande passée
-# directement à run_cmd avec un secret en argument littéral.
+# Ne touche jamais aux arguments réellement exécutés, seulement à la
+# représentation affichée par run_cmd : sans ça, un secret passé en
+# argument littéral (ex. `az rest --headers "Authorization=Bearer $token"`)
+# apparaît en clair dans les logs.
 redact_secrets() {
   sed -E \
     -e 's/(Bearer )[A-Za-z0-9_.-]+/\1[REDACTED]/g' \

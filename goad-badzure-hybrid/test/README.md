@@ -1,8 +1,32 @@
-# Fixtures de test
+# Stratégie de test et fixtures
 
-Le lab complet (GOAD + BadZure) est long et coûteux à redéployer. La plupart
-des scripts réseau/infra n'ont pourtant pas besoin du vrai lab pour être
-testés — seulement de ressources Azure ressemblantes. `setup-fixtures.sh`
+Le lab complet (GOAD + BadZure) est long et coûteux à redéployer (30 à 45
+minutes de provisioning, quota Azure Free Trial serré). Aucun script ne
+doit exiger un redéploiement complet pour être validé. Trois niveaux, du
+moins cher au plus cher :
+
+1. **Validation statique** (instantané, zéro Azure) : `bash -n` et
+   `shellcheck` pour tout script Bash, `Invoke-ScriptAnalyzer` pour tout
+   PowerShell.
+2. **Dry-run** (minutes, Azure en lecture seule) : chaque script supporte
+   `--dry-run`, qui logue les commandes d'écriture sans rien modifier. Une
+   fonction individuelle peut aussi être testée seule via
+   `source scripts/xx-....sh` puis un appel direct.
+3. **Fixtures jetables** (le levier principal pour les scripts
+   réseau/infra) : voir ci-dessous. Les scripts touchant dc01 en durci
+   (`30-goad-hardening-fix.sh`, `50-goad-gpo-unblock.sh`) et Entra Connect
+   (`40-prepare-entra-connect.sh`) ne sont testables que sur le vrai lab.
+
+Workflow avant de considérer un script validé : `shellcheck`/
+`Invoke-ScriptAnalyzer`, relecture, `--dry-run` sur l'infra réelle, puis si
+testable sur fixtures, exécution ciblée dessus. Le déploiement complet réel
+n'est fait qu'en fin de projet, comme test d'acceptation, jamais comme
+méthode de debug d'un script individuel.
+
+## Fixtures
+
+La plupart des scripts réseau/infra n'ont pas besoin du vrai lab pour être
+testés, seulement de ressources Azure ressemblantes. `setup-fixtures.sh`
 monte un environnement factice minimal (~2 min, deux VNets + deux petites VM
 Linux dans deux régions), `teardown-fixtures.sh` le détruit.
 
@@ -18,12 +42,12 @@ qui tournera réellement en production — pas une réplique.
 
 | Script | Testable sur fixtures ? | Raison |
 |---|---|---|
-| `10-migrate-jumpbox.sh` (B1) | Oui | Ne teste que snapshot/copie cross-région/recréation de VM Linux — les fixtures suffisent |
-| `20-peer-networks.sh` (B2) | Oui | Ne teste que la liaison de VNets |
-| `21-nsg-rules.sh` (B3) | Oui | Ne teste que des règles NSG |
-| `30-goad-hardening-fix.sh` (B4/B5, blocage) | Non | Nécessite un vrai DC Windows durci par GOAD |
-| `50-goad-gpo-unblock.sh` (B5, déblocage) | Non | Idem — dépend d'un vrai DC + d'une synchro Entra Connect réelle |
-| `40-prepare-entra-connect.sh` (B6) | Non | Nécessite le vrai tenant + la politique Conditional Access réelle |
+| `10-migrate-jumpbox.sh` | Oui | Ne teste que snapshot/copie cross-région/recréation de VM Linux, les fixtures suffisent |
+| `20-peer-networks.sh` | Oui | Ne teste que la liaison de VNets |
+| `21-nsg-rules.sh` | Oui | Ne teste que des règles NSG |
+| `30-goad-hardening-fix.sh` (blocage) | Non | Nécessite un vrai DC Windows durci par GOAD |
+| `50-goad-gpo-unblock.sh` (déblocage) | Non | Idem, dépend d'un vrai DC et d'une synchro Entra Connect réelle |
+| `40-prepare-entra-connect.sh` | Non | Nécessite le vrai tenant et la politique Conditional Access réelle |
 | `99-lifecycle.sh` | Partiellement | La logique start/stop/deallocate des VM se teste sur fixtures ; la partie ressources cloud BadZure (Function App/Logic App/Cosmos DB) ne se teste pas (n'existent pas dans les fixtures, qui n'ont pas vocation à répliquer BadZure) |
 
 ## Utilisation
@@ -47,19 +71,18 @@ Variables (optionnelles, sinon valeurs par défaut ci-dessous) :
 (défaut `Standard_B1s`), `FIXTURE_VM_IMAGE` (défaut une image Ubuntu 22.04
 Canonical). Ces deux régions sont choisies par défaut car connues avec de la
 marge de quota vCPU réelle sur cet abonnement (contrairement à
-`denmarkeast`, saturé 4/4 — cf. `infra-inventory.md`). Tout vit dans un seul
+`denmarkeast`, saturé 4/4). Tout vit dans un seul
 resource group dédié, jamais `$RG_GOAD`/`$RG_BADZURE` : aucun risque de
 toucher à l'infra réelle.
 
-**Constaté en conditions réelles** : `Standard_B1s` peut être temporairement
-indisponible dans une région donnée (`SkuNotAvailable` / restriction de
-capacité Azure ponctuelle — distincte du quota vCPU d'abonnement, qui lui
-est bien disponible). Rencontré sur `westus` lors d'un test réel de ce lot.
-Si `setup-fixtures.sh` échoue avec `SkuNotAvailable`, relancer avec une autre
-taille (`FIXTURE_VM_SIZE=Standard_B2s ./test/setup-fixtures.sh`) ou une autre
+`Standard_B1s` peut être temporairement indisponible dans une région donnée
+(`SkuNotAvailable`, restriction de capacité Azure ponctuelle, distincte du
+quota vCPU d'abonnement). Si `setup-fixtures.sh` échoue avec
+`SkuNotAvailable`, relancer avec une autre taille
+(`FIXTURE_VM_SIZE=Standard_B2s ./test/setup-fixtures.sh`) ou une autre
 région (`FIXTURE_REGION_B=...`) plutôt que d'y voir un bug du script.
 
-### Exemple — tester `create_peering` (B2) sur les fixtures
+### Exemple : tester `create_peering` sur les fixtures
 
 ```bash
 source lib/common.sh
@@ -74,7 +97,7 @@ create_peering "fixture-peer-b-to-a" "fixture-vnet-b" "$RG" "$VNET_A_ID"
 verify_peering_connected "fixture-peer-a-to-b" "fixture-vnet-a" "$RG"
 ```
 
-### Exemple — tester `ensure_nsg_rule` (B3) sur les fixtures
+### Exemple : tester `ensure_nsg_rule` sur les fixtures
 
 Les fixtures n'ont pas de NSG par défaut (VNets "vides", cf.
 `setup-fixtures.sh`) ; en créer un minimal avant de tester la fonction :
@@ -89,7 +112,7 @@ az network nsg create --name fixture-nsg-a --resource-group "$RG" --location ind
 ensure_nsg_rule "fixture-nsg-a" "$RG" "AllowSSHTest" 100 22 "203.0.113.10"
 ```
 
-### Exemple — tester une fonction de `10-migrate-jumpbox.sh` (B1) sur les fixtures
+### Exemple : tester une fonction de `10-migrate-jumpbox.sh` sur les fixtures
 
 Les fonctions bas niveau (`snapshot_source_disk`, `create_disk_from_snapshot`,
 `create_target_public_ip`, `create_target_nic`, ...) sont directement
@@ -97,8 +120,8 @@ appelables avec les ressources fixtures en argument, exactement comme
 `setup-fixtures.sh` le fait déjà pour `create_target_network`. Pour un test
 de migration complet, il faudrait un point de départ supplémentaire non
 fourni par `setup-fixtures.sh` (une VM/disque dans une "région source" à
-migrer vers une "région cible") — au-delà du périmètre minimal de ce Lot ;
-les fonctions individuelles suffisent pour valider chaque étape isolément.
+migrer vers une "région cible") ; les fonctions individuelles suffisent
+pour valider chaque étape isolément.
 
 ## Notes
 
@@ -113,5 +136,5 @@ les fonctions individuelles suffisent pour valider chaque étape isolément.
   minimaux.
 - `--no-wait` est utilisé pour la création des VM : `setup-fixtures.sh` peut
   rendre la main avant que les VM soient pleinement provisionnées côté
-  Azure — attendre quelques dizaines de secondes avant de tester une
-  fonction qui dépend de leur disque OS (ex. B1).
+  Azure, attendre quelques dizaines de secondes avant de tester une
+  fonction qui dépend de leur disque OS.
