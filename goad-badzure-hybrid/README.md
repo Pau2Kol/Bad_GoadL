@@ -23,7 +23,11 @@ cycle de vie).
 ## Installation
 
 Copier `config/lab.env.example` vers `config/lab.env` et renseigner les
-valeurs (tenant, abonnement, régions). Ce fichier n'est jamais commité.
+valeurs connues à l'avance (tenant, abonnement, régions). Ce fichier n'est
+jamais commité. Les autres variables (noms de resource group, IP privée de
+dc01, etc.) dépendent de noms choisis aléatoirement par BadZure/GOAD au
+déploiement : elles sont détectées automatiquement une fois déployés,
+laissez-les vides.
 
 ## Déployer le lab de zéro
 

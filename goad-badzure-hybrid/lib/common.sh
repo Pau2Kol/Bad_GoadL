@@ -68,6 +68,132 @@ load_lab_env() {
 
   verify_subscription_context || return 1
   resolve_allowed_ip
+  discover_rg_goad
+  discover_rg_badzure
+  discover_goad_instance_details
+}
+
+# repo_root_dir — chemin du dossier parent de goad-badzure-hybrid/, où vivent
+# les dossiers frères GOAD/ et BadZure/, résolu relativement à ce fichier
+# (indépendant du cwd de l'appelant).
+repo_root_dir() {
+  local lib_dir
+  lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  cd "${lib_dir}/../.." && pwd
+}
+
+# find_goad_workspace_dir — chemin du dossier d'instance GOAD déployée
+# (GOAD/workspace/<instance-id>/), déterminé par le nom de son dossier
+# d'instance, pas connaissable à l'avance : goad.py choisit cet identifiant
+# aléatoirement à la création. Vide si aucune instance ou plusieurs (auquel
+# cas l'opérateur doit renseigner les variables concernées à la main).
+find_goad_workspace_dir() {
+  local workspace_dir="${GOAD_DIR:-$(repo_root_dir)/GOAD}/workspace"
+  local matches=()
+  local d
+  for d in "$workspace_dir"/*/; do
+    [[ -d "$d" ]] && matches+=("${d%/}")
+  done
+  if [[ ${#matches[@]} -eq 1 ]]; then
+    echo "${matches[0]}"
+  fi
+}
+
+# discover_rg_goad — remplit $RG_GOAD par auto-détection si absente de
+# lab.env : son nom dépend de l'ID d'instance choisi par goad.py à la
+# création, pas connaissable avant déploiement.
+discover_rg_goad() {
+  if [[ -n "${RG_GOAD:-}" ]]; then
+    return 0
+  fi
+
+  local rg
+  rg="$(az group list --query "[?starts_with(name, 'GOAD-Light')].name | [0]" -o tsv 2>/dev/null)"
+  if [[ -n "$rg" && "$rg" != "None" ]]; then
+    log_info "RG_GOAD non renseignée dans lab.env : auto-détectée = $rg"
+    RG_GOAD="$rg"
+    export RG_GOAD
+  fi
+}
+
+# discover_rg_badzure — remplit $RG_BADZURE par auto-détection si absente de
+# lab.env, depuis terraform.tfvars.json de BadZure (généré par BadZure.py
+# build) : BadZure choisit des noms de resource group aléatoires à chaque
+# déploiement.
+discover_rg_badzure() {
+  if [[ -n "${RG_BADZURE:-}" ]]; then
+    return 0
+  fi
+
+  local tfvars="${BADZURE_DIR:-$(repo_root_dir)/BadZure}/terraform/terraform.tfvars.json"
+  if [[ ! -f "$tfvars" ]]; then
+    return 0
+  fi
+
+  local rg
+  rg="$(python3 -c "
+import json
+with open('$tfvars') as f:
+    data = json.load(f)
+rgs = list(data.get('resource_groups', {}).keys())
+print(rgs[0] if rgs else '')
+" 2>/dev/null)"
+
+  if [[ -n "$rg" ]]; then
+    log_info "RG_BADZURE non renseignée dans lab.env : auto-détectée = $rg"
+    RG_BADZURE="$rg"
+    export RG_BADZURE
+  fi
+}
+
+# discover_goad_instance_details — remplit JUMPBOX_SSH_KEY_PATH,
+# DC01_PRIVATE_IP et DC01_ADMIN_PASSWORD par auto-détection si absentes de
+# lab.env : elles dépendent toutes du dossier d'instance GOAD (nom
+# aléatoire) et, pour les deux dernières, de `terraform output`.
+discover_goad_instance_details() {
+  local instance_dir
+  instance_dir="$(find_goad_workspace_dir)"
+  if [[ -z "$instance_dir" ]]; then
+    return 0
+  fi
+
+  if [[ -z "${JUMPBOX_SSH_KEY_PATH:-}" && -f "${instance_dir}/ssh_keys/ubuntu-jumpbox.pem" ]]; then
+    JUMPBOX_SSH_KEY_PATH="${instance_dir}/ssh_keys/ubuntu-jumpbox.pem"
+    export JUMPBOX_SSH_KEY_PATH
+    log_info "JUMPBOX_SSH_KEY_PATH non renseignée dans lab.env : auto-détectée = $JUMPBOX_SSH_KEY_PATH"
+  fi
+
+  if [[ -n "${DC01_PRIVATE_IP:-}" && -n "${DC01_ADMIN_PASSWORD:-}" ]]; then
+    return 0
+  fi
+
+  local vm_config
+  vm_config="$(cd "${instance_dir}/provider" 2>/dev/null && terraform output -json vm-config 2>/dev/null)"
+  if [[ -z "$vm_config" ]]; then
+    return 0
+  fi
+
+  if [[ -z "${DC01_PRIVATE_IP:-}" ]]; then
+    DC01_PRIVATE_IP="$(python3 -c "
+import json, sys
+print(json.loads(sys.argv[1]).get('dc01', {}).get('private_ip_address', ''))
+" "$vm_config" 2>/dev/null)"
+    if [[ -n "$DC01_PRIVATE_IP" ]]; then
+      export DC01_PRIVATE_IP
+      log_info "DC01_PRIVATE_IP non renseignée dans lab.env : auto-détectée = $DC01_PRIVATE_IP"
+    fi
+  fi
+
+  if [[ -z "${DC01_ADMIN_PASSWORD:-}" ]]; then
+    DC01_ADMIN_PASSWORD="$(python3 -c "
+import json, sys
+print(json.loads(sys.argv[1]).get('dc01', {}).get('password', ''))
+" "$vm_config" 2>/dev/null)"
+    if [[ -n "$DC01_ADMIN_PASSWORD" ]]; then
+      export DC01_ADMIN_PASSWORD
+      log_info "DC01_ADMIN_PASSWORD non renseignée dans lab.env : auto-détectée depuis terraform output."
+    fi
+  fi
 }
 
 # verify_subscription_context — si $SUBSCRIPTION_ID est renseignée dans
