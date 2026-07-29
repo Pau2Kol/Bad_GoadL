@@ -74,6 +74,7 @@ refuse d'agir si ce n'est pas le cas.
 ```bash
 ./scripts/99-lifecycle.sh stop    # fin de session, économise les coûts Azure
 ./scripts/99-lifecycle.sh start   # reprise
+./scripts/reset-goad.sh           # supprime le déploiement GOAD-Light en cours pour repartir de zéro
 ```
 
 ## Pour aller plus loin
