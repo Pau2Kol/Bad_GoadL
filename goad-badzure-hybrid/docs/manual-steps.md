@@ -32,16 +32,18 @@ relancé sans eux alors que le SP existe déjà, il détecte l'app/le SP/les
 permissions existants (ne les recrée pas) et ne génère qu'un nouveau secret
 (un secret client Azure AD n'étant jamais récupérable après coup).
 
-Le SP créé lors des tests de ce projet existe déjà dans ce tenant :
-- Nom : `goad-badzure-hybrid-automation`
-- App ID (client ID) : `438e6c4d-693c-431f-aee6-349929a5875a`
-- Permissions applicatives Graph, avec consentement admin déjà accordé :
-  `User.ReadWrite.All`, `RoleManagement.ReadWrite.Directory`
-- Le secret client n'est **pas** stocké dans ce dépôt — à conserver par
-  l'opérateur dans un gestionnaire de mots de passe. En cas de perte,
-  relancer `scripts/40-prepare-entra-connect.sh` sans
-  `GRAPH_CLIENT_ID`/`GRAPH_CLIENT_SECRET` dans `config/lab.env` : il détecte
-  ce SP existant et régénère un nouveau secret automatiquement.
+Le SP créé par ce bootstrap (nom fixe : `goad-badzure-hybrid-automation`) a
+pour permissions applicatives Graph, avec consentement admin accordé
+automatiquement : `User.ReadWrite.All`, `RoleManagement.ReadWrite.Directory`.
+Son App ID (client ID) est propre à chaque tenant/déploiement : à noter dans
+`config/lab.env` (`GRAPH_CLIENT_ID`), jamais dans ce document. Le secret
+client n'est **pas** stocké dans ce dépôt, à conserver par l'opérateur dans
+un gestionnaire de mots de passe. En cas de perte, relancer
+`scripts/40-prepare-entra-connect.sh` sans `GRAPH_CLIENT_ID`/`GRAPH_CLIENT_SECRET`
+dans `config/lab.env` : il détecte ce SP existant et régénère un nouveau
+secret automatiquement. Si le SP lui-même a été supprimé (ex. nettoyage
+complet du tenant avant un redéploiement from-scratch), le même script le
+recrée entièrement depuis zéro.
 
 Sur un tout premier déploiement (nouveau tenant, aucun SP existant), le même
 script crée tout depuis zéro — aucune étape manuelle nécessaire pour ce
