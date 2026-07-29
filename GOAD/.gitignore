@@ -31,6 +31,7 @@ ad/*/providers/*/extensions/*.rb
 __pycache__/
 *.pyc
 workspace/*
+!workspace/.git_keep
 todo.md
 next_extensions/
 /extensions/exchange/ansible/iso/resources/iso/*.ISO
