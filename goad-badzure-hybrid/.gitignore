@@ -1,0 +1,30 @@
+# Terraform state & variables (GOAD/BadZure ont leurs propres states ; ce .gitignore
+# couvre aussi tout state/variables propre à ce projet d'orchestration, le cas échéant).
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+.terraform/
+.terraform.lock.hcl
+
+# Configuration locale contenant des secrets (tenant_id, subscription_id, IP, mots de passe...)
+*.env
+config/lab.env
+
+# Credentials / clés / certificats
+*credential*
+*secret*
+*.pem
+*.key
+*.pfx
+
+# Logs d'exécution des scripts
+*.log
+logs/
+
+# Artefacts Python (lib/run_powershell.py)
+__pycache__/
+*.pyc
+
+# Divers
+.DS_Store

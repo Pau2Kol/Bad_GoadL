@@ -1,0 +1,23 @@
+NOTICE — goad-badzure-hybrid
+
+Ce projet orchestre le déploiement combiné de deux projets tiers :
+
+- GOAD — https://github.com/Orange-Cyberdefense/GOAD
+  Distribué sous licence GNU General Public License v3.0 (GPL-3.0).
+  Copyright (c) les contributeurs GOAD / Orange Cyberdefense.
+  Texte complet : ../GOAD/LICENSE
+
+- BadZure
+  Distribué sous licence Apache License 2.0.
+  Copyright (c) les contributeurs BadZure.
+  Texte complet : ../BadZure/LICENSE
+
+Ce dépôt (goad-badzure-hybrid/) ne redistribue pas le code source de GOAD ni de
+BadZure : il contient des scripts d'orchestration externes (Bash, PowerShell)
+et des fichiers de configuration qui pilotent ces deux projets sans en
+modifier la licence.
+
+Une exception : les modifications apportées directement à des fichiers du
+projet GOAD (ex. `GOAD/ad/GOAD-Light/providers/azure/windows.tf`) restent
+soumises à la licence GPL-3.0 de GOAD. Le détail de ces modifications est
+documenté dans `docs/amont-changes.md`.

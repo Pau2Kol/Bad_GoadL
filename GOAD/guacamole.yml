@@ -1,0 +1,13 @@
+---
+# GUACAMOLE MYSQL
+mysql_root_password: "ohmygoadimroot"
+mysql_root_password_update: true
+guacamole_db: guacamole
+guacamole_db_username: guacamole
+guacamole_db_password: guacamoleedb
+# GUACAMOLE
+layout: "fr-fr-azerty"
+guacadmin_password: "guacadmin!"
+guacamole_users:
+  - name: "user"
+    pass: "guacamole_password"
