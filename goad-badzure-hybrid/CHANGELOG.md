@@ -848,3 +848,26 @@ redéployé from scratch. Restent, par conception (non scriptables — cf.
 `docs/manual-steps.md`) : installation d'Entra Connect + wizard ABA sur
 dc01 (accès RDP requis, contournement de la Conditional Access du tenant),
 puis vérification de la synchro, puis `scripts/50-goad-gpo-unblock.sh`.
+
+### Test final conclu avec succès — redéploiement from-scratch complet
+Wizard ABA Entra Connect installé manuellement par l'opérateur (RDP + sync-admin).
+Synchro vérifiée sous deux angles : `check-adsync.ps1` (service ADSync
+Running, `NextSyncCyclePolicyType=Delta`, Provider Type 24 intact) et,
+côté tenant, requête Graph confirmant tous les utilisateurs
+`sevenkingdoms.local` (jon.snow, arya.stark, tyrion.lannister, etc.)
+présents avec `onPremisesSamAccountName` renseigné.
+
+`scripts/50-goad-gpo-unblock.sh` exécuté pour de vrai en dernier : héritage
+GPO débloqué sur l'OU Domain Controllers, `gpupdate /force` appliqué, et
+sa vérification post-déblocage intégrée confirme que le durcissement GOAD
+réactivé **n'a pas** recassé le crypto fix ni le service ADSync — c'est
+précisément le bug d'origine que ce projet corrige, reproduit et validé
+comme résolu en conditions réelles.
+
+**Chaîne complète validée de bout en bout, sur un lab détruit puis
+entièrement redéployé via les scripts de ce projet** : `BadZure.py build` →
+`goad.py` (provisioning GOAD-Light) → `10` → `20` → `21` → `40` →
+provisioning Ansible → `30` → wizard ABA (manuel) → vérification synchro →
+`50`. Chaque bug réel rencontré en route (quota Azure, IP publique figée,
+désync jumpbox/Terraform, workspace GOAD manquant, etc.) a été corrigé et
+documenté au fil de l'eau plutôt que contourné silencieusement.
