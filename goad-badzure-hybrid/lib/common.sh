@@ -383,6 +383,35 @@ run_cmd() {
   "$@"
 }
 
+# retry_cmd <tentatives> <délai_secondes> <commande...> — répète une
+# commande (via run_cmd, donc --dry-run compatible) jusqu'à succès ou
+# épuisement des tentatives. Sert contre la latence de propagation Azure AD :
+# une app registration/service principal/secret tout juste créé peut faire
+# échouer les tout premiers appels qui l'utilisent (admin-consent, émission
+# de jeton), alors que la même commande relancée quelques secondes plus tard
+# réussit sans rien changer d'autre.
+retry_cmd() {
+  local attempts="$1" delay="$2"
+  shift 2
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    run_cmd "$@"
+    return 0
+  fi
+
+  local i
+  for ((i = 1; i <= attempts; i++)); do
+    if run_cmd "$@"; then
+      return 0
+    fi
+    if [[ "$i" -lt "$attempts" ]]; then
+      log_warn "Échec (tentative $i/$attempts), nouvelle tentative dans ${delay}s (latence de propagation Azure AD probable)."
+      sleep "$delay"
+    fi
+  done
+  return 1
+}
+
 # resource_exists <args az...> — garde d'idempotence générique : vrai si
 # `az "$@"` réussit (ex. resource_exists vm show --name x --resource-group y).
 # Ne modifie rien : uniquement des commandes de lecture (show/list).

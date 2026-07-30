@@ -156,7 +156,15 @@ ensure_graph_automation_permissions() {
   done
 
   if [[ "$missing" -eq 1 ]]; then
-    run_cmd az ad app permission admin-consent --id "$app_id"
+    # L'app/le SP viennent potentiellement d'être créés (quelques secondes
+    # plus tôt) : admin-consent échoue souvent une première fois le temps que
+    # l'objet se propage dans Azure AD, sans qu'il y ait de vraie erreur à
+    # corriger — retry_cmd absorbe ce délai au lieu de faire échouer tout le
+    # bootstrap.
+    retry_cmd 5 10 az ad app permission admin-consent --id "$app_id" || {
+      log_error "admin-consent a échoué après plusieurs tentatives pour l'app $app_id (délai de propagation Azure AD dépassé, ou permission réellement refusée — vérifier manuellement)."
+      return 1
+    }
   fi
 }
 
@@ -177,9 +185,13 @@ ensure_graph_automation_bootstrap() {
   local app_id sp_id secret
   app_id="$(ensure_graph_automation_app "$display_name")"
   sp_id="$(ensure_graph_automation_sp "$app_id")"
-  ensure_graph_automation_permissions "$app_id" "$sp_id"
+  ensure_graph_automation_permissions "$app_id" "$sp_id" || return 1
 
   secret="$(run_cmd az ad app credential reset --id "$app_id" --append --years 1 --query password -o tsv)"
+  if [[ "$DRY_RUN" != "true" && -z "$secret" ]]; then
+    log_error "Échec de la génération du secret client pour l'app $app_id."
+    return 1
+  fi
 
   if [[ "$DRY_RUN" != "true" ]]; then
     log_info "SP app-only prêt : GRAPH_CLIENT_ID=$app_id"
@@ -195,6 +207,12 @@ ensure_graph_automation_bootstrap() {
 # DRY-RUN : ne fait JAMAIS le curl réel vers login.microsoftonline.com (pas
 # d'authentification live avec le vrai secret client) — renvoie un jeton
 # factice, uniquement consommé par du code lui-même dry-run-aware en aval.
+#
+# Un secret/SP tout juste créé peut ne pas être encore propagé côté Azure AD :
+# les toutes premières tentatives peuvent échouer (réponse vide ou erreur
+# HTTP) sans qu'il y ait de vraie erreur à corriger. Réessaie donc plusieurs
+# fois avant d'abandonner. Ne plante jamais sur une réponse non-JSON (secret
+# invalide, throttling) : renvoie une chaîne vide et un code d'échec.
 get_graph_app_token() {
   local tid="$1" app_client_id="$2" app_client_secret="$3"
   if [[ "$DRY_RUN" == "true" ]]; then
@@ -202,12 +220,45 @@ get_graph_app_token() {
     echo "DRY-RUN-FAKE-TOKEN"
     return 0
   fi
-  curl -sf -X POST "https://login.microsoftonline.com/${tid}/oauth2/v2.0/token" \
-    --data-urlencode "client_id=${app_client_id}" \
-    --data-urlencode "scope=https://graph.microsoft.com/.default" \
-    --data-urlencode "client_secret=${app_client_secret}" \
-    --data-urlencode "grant_type=client_credentials" \
-    | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))"
+
+  local attempt token
+  for attempt in 1 2 3 4 5; do
+    token="$(curl -s -X POST "https://login.microsoftonline.com/${tid}/oauth2/v2.0/token" \
+      --data-urlencode "client_id=${app_client_id}" \
+      --data-urlencode "scope=https://graph.microsoft.com/.default" \
+      --data-urlencode "client_secret=${app_client_secret}" \
+      --data-urlencode "grant_type=client_credentials" \
+      2>/dev/null | python3 -c "
+import sys, json
+try:
+    print(json.load(sys.stdin).get('access_token', ''))
+except Exception:
+    print('')
+" 2>/dev/null)"
+
+    if [[ -n "$token" ]]; then
+      echo "$token"
+      return 0
+    fi
+
+    if [[ "$attempt" -lt 5 ]]; then
+      log_warn "Jeton app-only introuvable (tentative $attempt/5) : SP/secret probablement pas encore propagés côté Azure AD, nouvelle tentative dans 10s."
+      sleep 10
+    fi
+  done
+
+  log_error "Impossible d'obtenir un jeton app-only après 5 tentatives (appId=$app_client_id)."
+  return 1
+}
+
+# get_graph_app_auth_header <tenant_id> <client_id> <client_secret> — renvoie
+# "Bearer <jeton>" sur stdout ; échoue (return 1, rien sur stdout) si
+# get_graph_app_token échoue, au lieu de propager silencieusement un jeton
+# vide aux appels Graph suivants.
+get_graph_app_auth_header() {
+  local token
+  token="$(get_graph_app_token "$@")" || return 1
+  echo "Bearer $token"
 }
 
 # generate_temp_password — mot de passe temporaire aléatoire pour la création
@@ -244,16 +295,26 @@ get_or_activate_hybrid_identity_admin_role() {
     return 0
   fi
 
-  run_cmd az rest --method POST \
+  role_id="$(run_cmd az rest --method POST \
     --headers "Authorization=${auth_header}" "Content-Type=application/json" \
     --url "https://graph.microsoft.com/v1.0/directoryRoles" \
     --body "{\"roleTemplateId\": \"${HYBRID_IDENTITY_ADMIN_ROLE_TEMPLATE_ID}\"}" \
-    --query "id" -o tsv
+    --query "id" -o tsv)"
+
+  if [[ -z "$role_id" ]]; then
+    log_error "Impossible d'activer/récupérer le directoryRole ${HYBRID_IDENTITY_ADMIN_ROLE_NAME}."
+    return 1
+  fi
+  echo "$role_id"
 }
 
 # assign_role_to_user <auth_header> <role_id> <user_id>
 assign_role_to_user() {
   local auth_header="$1" role_id="$2" user_id="$3"
+  if [[ -z "$role_id" || -z "$user_id" ]]; then
+    log_error "assign_role_to_user : role_id ou user_id manquant, impossible d'attribuer le rôle."
+    return 1
+  fi
   run_cmd az rest --method POST \
     --headers "Authorization=${auth_header}" "Content-Type=application/json" \
     --url "https://graph.microsoft.com/v1.0/directoryRoles/${role_id}/members/\$ref" \
@@ -289,6 +350,11 @@ print(json.dumps({
     --url "https://graph.microsoft.com/v1.0/users" \
     --body "$body" \
     --query id -o tsv)"
+
+  if [[ "$DRY_RUN" != "true" && -z "$new_user_id" ]]; then
+    log_error "Échec de la création du compte sync-admin@${domain} (voir la sortie az rest ci-dessus pour la cause exacte)."
+    return 1
+  fi
 
   if [[ "$DRY_RUN" != "true" ]]; then
     log_info "Compte sync-admin@${domain} créé (id: ${new_user_id})."
@@ -349,9 +415,9 @@ ensure_sync_admin() {
       return 1
     fi
     local auth_header role_id
-    auth_header="Bearer $(get_graph_app_token "$TENANT_ID" "$GRAPH_CLIENT_ID" "$GRAPH_CLIENT_SECRET")"
-    role_id="$(get_or_activate_hybrid_identity_admin_role "$auth_header")"
-    assign_role_to_user "$auth_header" "$role_id" "$user_id"
+    auth_header="$(get_graph_app_auth_header "$TENANT_ID" "$GRAPH_CLIENT_ID" "$GRAPH_CLIENT_SECRET")" || return 1
+    role_id="$(get_or_activate_hybrid_identity_admin_role "$auth_header")" || return 1
+    assign_role_to_user "$auth_header" "$role_id" "$user_id" || return 1
     return 0
   fi
 
@@ -363,10 +429,10 @@ ensure_sync_admin() {
   fi
 
   local auth_header new_user_id role_id
-  auth_header="Bearer $(get_graph_app_token "$TENANT_ID" "$GRAPH_CLIENT_ID" "$GRAPH_CLIENT_SECRET")"
-  new_user_id="$(create_sync_admin "$auth_header" "$TENANT_DOMAIN")"
-  role_id="$(get_or_activate_hybrid_identity_admin_role "$auth_header")"
-  assign_role_to_user "$auth_header" "$role_id" "$new_user_id"
+  auth_header="$(get_graph_app_auth_header "$TENANT_ID" "$GRAPH_CLIENT_ID" "$GRAPH_CLIENT_SECRET")" || return 1
+  new_user_id="$(create_sync_admin "$auth_header" "$TENANT_DOMAIN")" || return 1
+  role_id="$(get_or_activate_hybrid_identity_admin_role "$auth_header")" || return 1
+  assign_role_to_user "$auth_header" "$role_id" "$new_user_id" || return 1
 }
 
 # cleanup_duplicate_connectsync_apps — supprime toutes les apps
@@ -398,7 +464,7 @@ cleanup_duplicate_connectsync_apps() {
   fi
 
   local auth_header
-  auth_header="Bearer $(get_graph_app_token "$TENANT_ID" "$GRAPH_CLIENT_ID" "$GRAPH_CLIENT_SECRET")"
+  auth_header="$(get_graph_app_auth_header "$TENANT_ID" "$GRAPH_CLIENT_ID" "$GRAPH_CLIENT_SECRET")" || return 1
 
   local newest_id
   newest_id="$(sort -t $'\t' -k4 -r <<< "$apps" | head -1 | cut -f1)"
@@ -418,10 +484,10 @@ cleanup_duplicate_connectsync_apps() {
 prepare_entra_connect() {
   require_vars TENANT_ID TENANT_DOMAIN || return 1
 
-  ensure_graph_automation_bootstrap
+  ensure_graph_automation_bootstrap || return 1
 
-  ensure_sync_admin
-  cleanup_duplicate_connectsync_apps
+  ensure_sync_admin || return 1
+  cleanup_duplicate_connectsync_apps || return 1
 
   log_info "Préparation Entra Connect terminée. Suite : installation + wizard ABA (étape manuelle, cf. docs/manual-steps.md)."
 }
