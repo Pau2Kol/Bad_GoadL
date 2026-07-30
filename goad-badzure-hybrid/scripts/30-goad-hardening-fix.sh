@@ -11,7 +11,7 @@
 # séparé : scripts/50-goad-gpo-unblock.sh, appelé seulement après validation
 # de la synchro Entra Connect — pas enchaîné automatiquement ici.
 #
-# NON TESTABLE SUR FIXTURES (cf. test/README.md) : nécessite un vrai DC
+# NON TESTABLE SUR FIXTURES : nécessite un vrai DC
 # Windows durci par GOAD. Même sous --dry-run, get_jumpbox_public_ip (lecture
 # seule) interroge réellement Azure ; le tunnel SSH et les invocations
 # PowerShell, eux, sont entièrement mockés.

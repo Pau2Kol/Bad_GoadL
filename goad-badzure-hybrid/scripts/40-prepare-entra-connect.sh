@@ -29,7 +29,7 @@
 # explicite de prepare_entra_connect (ou d'une fonction individuelle).
 #
 # Non testable sur fixtures (nécessite le vrai tenant et la Conditional
-# Access réelle, cf. test/README.md).
+# Access réelle).
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../lib/common.sh disable=SC1091

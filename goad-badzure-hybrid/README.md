@@ -20,11 +20,8 @@ cycle de vie).
 - `ssh`.
 - `terraform`.
 
-Rien à installer ni à configurer avant de déployer : `config/lab.env` est
-suivi directement dans le dépôt, vide, et tout est auto-détecté (compte az
-actif, régions par défaut, ressources créées par BadZure/GOAD au fur et à
-mesure du déploiement). Une valeur explicite dans `config/lab.env` reste
-toujours prioritaire sur l'auto-détection.
+Rien à installer ni à configurer avant de déployer. Une valeur explicite
+dans `config/lab.env` reste toujours prioritaire sur l'auto-détection.
 
 ## Déployer le lab de zéro
 
@@ -46,9 +43,6 @@ cd ../goad-badzure-hybrid && ./scripts/00-deploy.sh goad
 #    sync-admin, hardening de dc01
 ./scripts/00-deploy.sh link
 ```
-
-Si l'étape 2 échoue (prompt Terraform bloqué), voir
-`docs/troubleshooting.md`.
 
 **4. Étape manuelle.** D'abord, se connecter une fois sur
 `https://myaccount.microsoft.com` avec le compte `sync-admin` et définir son
@@ -78,7 +72,5 @@ refuse d'agir si ce n'est pas le cas.
 - `docs/manual-steps.md` : détail de l'étape 4 (Entra Connect).
 - `docs/troubleshooting.md` : problèmes connus et solutions.
 - `docs/amont-changes.md` : modifications apportées aux fichiers GOAD.
-- `test/README.md` : stratégie de test et fixtures, pour tester un script
-  sans redéployer le lab entier.
 - `NOTICE` : attribution des licences (GOAD en GPL-3.0, BadZure en
   Apache-2.0).

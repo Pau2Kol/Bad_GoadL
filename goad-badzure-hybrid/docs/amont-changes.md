@@ -104,9 +104,8 @@ dès cette étape car le provisioning Ansible de `goad.py` (juste après
 l'apply) se connecte depuis la jumpbox vers dc01 en WinRM.
 
 `scripts/10-migrate-jumpbox.sh` n'est plus appelé par l'orchestrateur mais
-reste dans le dépôt (toujours testé via les fixtures, cf. `test/README.md`) :
-utilitaire générique de migration cross-région d'une VM Linux, potentiellement
-réutile pour d'autres besoins.
+reste dans le dépôt : utilitaire générique de migration cross-région d'une VM
+Linux, potentiellement réutile pour d'autres besoins.
 
 ## Non appliqué : région explicite pour BadZure
 

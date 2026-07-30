@@ -11,7 +11,7 @@
 # durcissement GPO qui vient d'être réactivé ne doit pas recasser le crypto
 # fix — c'est exactement le bug d'origine que ce projet corrige).
 #
-# NON TESTABLE SUR FIXTURES (cf. test/README.md) : nécessite un
+# NON TESTABLE SUR FIXTURES : nécessite un
 # vrai DC Windows durci par GOAD, avec une synchro Entra Connect réellement
 # en cours. Ne pas exécuter sans validation explicite préalable de
 # l'opérateur (cf. scripts/30-goad-hardening-fix.sh pour le même

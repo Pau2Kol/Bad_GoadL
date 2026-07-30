@@ -12,8 +12,7 @@
 #
 # Sourçable : `source scripts/10-migrate-jumpbox.sh` ne fait que définir les
 # fonctions ci-dessous ; rien n'est exécuté avant l'appel explicite de
-# migrate_jumpbox (ou d'une fonction individuelle, pour les tests sur
-# fixtures, cf. test/README.md).
+# migrate_jumpbox (ou d'une fonction individuelle).
 #
 # Toutes les commandes d'écriture passent par run_cmd (lib/common.sh), qui
 # respecte --dry-run.
@@ -317,8 +316,7 @@ check_stale_migration_orphans() {
 # valeurs de ressources ont un défaut correspondant à la convention de
 # nommage GOAD observée (stable, non aléatoire, cf.
 # GOAD/template/provider/azure/jumpbox.tf), mais restent surchargeables par
-# variable d'environnement (utile pour les fixtures de test, cf.
-# test/README.md).
+# variable d'environnement.
 migrate_jumpbox() {
   require_vars RG_GOAD REGION_JUMPBOX ALLOWED_IP || return 1
 

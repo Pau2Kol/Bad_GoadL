@@ -11,8 +11,7 @@
 #
 # Sourçable : `source scripts/21-nsg-rules.sh` ne fait que définir les
 # fonctions ci-dessous ; rien n'est exécuté avant l'appel explicite de
-# apply_nsg_hardening (ou d'une fonction individuelle, pour les tests sur
-# fixtures — cf. test/README.md).
+# apply_nsg_hardening (ou d'une fonction individuelle).
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../lib/common.sh disable=SC1091

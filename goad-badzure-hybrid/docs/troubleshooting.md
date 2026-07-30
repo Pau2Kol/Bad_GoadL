@@ -71,18 +71,3 @@ python3 run_provisioning.py
 Remplacer `<instance>` par l'identifiant d'instance GOAD (nom du dossier
 sous `workspace/`) et `<IP publique actuelle du jumpbox>` par sa vraie IP
 (`az vm show --name ubuntu-jumpbox -d --query publicIps -o tsv`).
-
-## Un script échoue sur "Variable(s) manquante(s)" alors que le lab est déployé
-
-**Symptôme** : `RG_GOAD`, `RG_BADZURE`, `JUMPBOX_SSH_KEY_PATH`,
-`DC01_PRIVATE_IP` ou `DC01_ADMIN_PASSWORD` signalées manquantes, alors que
-BadZure et GOAD sont bien déployés.
-
-**Cause** : ces variables sont auto-détectées (voir
-`config/lab.env`), mais la détection échoue si plusieurs instances
-GOAD existent dans `GOAD/workspace/` (ambigu, aucune n'est choisie
-automatiquement) ou si `BadZure/terraform/terraform.tfvars.json` est absent.
-
-**Solution** : renseigner la variable manquante à la main dans
-`config/lab.env`, ou supprimer les dossiers d'instance GOAD obsolètes sous
-`GOAD/workspace/` pour qu'il n'en reste qu'un seul.

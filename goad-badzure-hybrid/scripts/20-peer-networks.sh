@@ -16,8 +16,7 @@
 #
 # Sourçable : `source scripts/20-peer-networks.sh` ne fait que définir les
 # fonctions ci-dessous ; rien n'est exécuté avant l'appel explicite de
-# peer_networks (ou de create_peering isolément, pour les tests sur fixtures
-# — cf. test/README.md).
+# peer_networks (ou de create_peering isolément).
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../lib/common.sh disable=SC1091
