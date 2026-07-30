@@ -13,6 +13,9 @@
 #   finish  À lancer après le wizard : vérifie que la synchro est stable,
 #           puis débloque les GPO. Refuse de continuer si la synchro n'est
 #           pas confirmée.
+#   creds   Affiche les identifiants du lab : secrets à révélation unique
+#           enregistrés pendant le déploiement (config/credentials.local.txt)
+#           et valeurs re-découvrables (DC01_ADMIN_PASSWORD, clé SSH jumpbox...).
 #
 # Sourçable : `source scripts/00-deploy.sh` ne fait que définir les
 # fonctions ci-dessous ; rien n'est exécuté avant l'appel explicite d'une
@@ -160,8 +163,11 @@ main() {
     finish)
       deploy_finish
       ;;
+    creds)
+      show_credentials
+      ;;
     *)
-      log_error "Usage : $0 [--dry-run] goad|link|finish"
+      log_error "Usage : $0 [--dry-run] goad|link|finish|creds"
       return 1
       ;;
   esac

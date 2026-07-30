@@ -195,7 +195,9 @@ ensure_graph_automation_bootstrap() {
 
   if [[ "$DRY_RUN" != "true" ]]; then
     log_info "SP app-only prêt : GRAPH_CLIENT_ID=$app_id"
-    log_warn "Nouveau secret client généré (à NOTER MAINTENANT dans config/lab.env, non re-affiché) : $secret"
+    persist_lab_env_var "GRAPH_CLIENT_ID" "$app_id"
+    persist_lab_env_var "GRAPH_CLIENT_SECRET" "$secret"
+    log_info "GRAPH_CLIENT_ID/GRAPH_CLIENT_SECRET enregistrés dans config/lab.env : pas de nouveau bootstrap au prochain run."
   fi
 
   GRAPH_CLIENT_ID="$app_id"
@@ -358,7 +360,8 @@ print(json.dumps({
 
   if [[ "$DRY_RUN" != "true" ]]; then
     log_info "Compte sync-admin@${domain} créé (id: ${new_user_id})."
-    log_warn "Mot de passe temporaire (à NOTER MAINTENANT, non re-affiché) : ${temp_password}"
+    log_warn "Mot de passe temporaire (non re-affiché), enregistré dans config/credentials.local.txt."
+    record_credential "sync-admin@${domain} (mot de passe temporaire)" "$temp_password"
     log_warn "Étape manuelle requise ensuite : connexion portail avec ce compte pour définir le mot de passe définitif — cf. docs/manual-steps.md."
   fi
 

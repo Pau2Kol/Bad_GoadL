@@ -156,6 +156,96 @@ repo_root_dir() {
   cd "${lib_dir}/../.." && pwd
 }
 
+# credentials_file — chemin du fichier local (jamais commité, cf.
+# .gitignore : *credential*) qui centralise les identifiants du lab.
+credentials_file() {
+  echo "$(repo_root_dir)/goad-badzure-hybrid/config/credentials.local.txt"
+}
+
+# persist_lab_env_var <clé> <valeur> — écrit/remplace une variable dans
+# config/lab.env. Réservé aux valeurs qui ne sont PAS re-détectables après
+# coup (GRAPH_CLIENT_ID/GRAPH_CLIENT_SECRET) : à la différence de RG_GOAD,
+# DC01_ADMIN_PASSWORD, etc., qui se re-découvrent à chaque run sans jamais
+# rien écrire dans ce fichier, un secret généré une seule fois doit y être
+# persisté pour ne pas être régénéré inutilement (et sans délai de
+# propagation Azure AD à répéter) au prochain run.
+persist_lab_env_var() {
+  local key="$1" value="$2"
+  local env_file
+  env_file="$(repo_root_dir)/goad-badzure-hybrid/config/lab.env"
+
+  python3 - "$env_file" "$key" "$value" <<'PYEOF'
+import re, sys
+
+path, key, value = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(path) as f:
+    content = f.read()
+
+pattern = re.compile(rf"^{re.escape(key)}=.*$", re.MULTILINE)
+replacement = f"{key}={value}"
+
+if pattern.search(content):
+    content = pattern.sub(replacement, content, count=1)
+else:
+    content = content.rstrip("\n") + f"\n{replacement}\n"
+
+with open(path, "w") as f:
+    f.write(content)
+PYEOF
+}
+
+# record_credential <label> <valeur> — ajoute une ligne horodatée au fichier
+# local de creds. Réservé au mot de passe temporaire sync-admin : une fois
+# affiché en log, il n'est plus jamais récupérable auprès d'Entra ID,
+# contrairement aux valeurs auto-détectables à la demande (DC01_ADMIN_PASSWORD,
+# etc.), donc écrit ici au moment exact de sa génération plutôt que
+# reconstruit après coup.
+record_credential() {
+  local label="$1" value="$2"
+  local file
+  file="$(credentials_file)"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${label} = ${value}" >> "$file"
+}
+
+# show_credentials — liste unique des identifiants nécessaires pour se
+# connecter au lab (pas les credentials d'automatisation interne comme
+# GRAPH_CLIENT_ID/SECRET, cf. config/lab.env pour ceux-là). Suppose
+# load_lab_env déjà appelée (variables déjà peuplées par auto-détection).
+show_credentials() {
+  local jumpbox_ip
+  jumpbox_ip="$(az vm list-ip-addresses \
+    --name "${JUMPBOX_VM_NAME:-ubuntu-jumpbox}" \
+    --resource-group "${RG_GOAD:-}" \
+    --query "[0].virtualMachine.network.publicIpAddresses[0].ipAddress" \
+    -o tsv 2>/dev/null)"
+
+  echo "=== Identifiants du lab ==="
+  echo "TENANT_DOMAIN        = ${TENANT_DOMAIN:-<inconnu>}"
+
+  local file
+  file="$(credentials_file)"
+  if [[ -f "$file" ]]; then
+    cat "$file"
+  else
+    echo "sync-admin : mot de passe temporaire pas encore généré (lancer ./scripts/00-deploy.sh link)."
+  fi
+
+  echo "DC01_ADMIN_USER      = ${DC01_ADMIN_USER:-<inconnu>}"
+  echo "DC01_ADMIN_PASSWORD  = ${DC01_ADMIN_PASSWORD:-<inconnu>}"
+  echo "JUMPBOX_SSH_USER     = ${JUMPBOX_SSH_USER:-<inconnu>}"
+  echo "JUMPBOX_SSH_KEY_PATH = ${JUMPBOX_SSH_KEY_PATH:-<inconnu>}"
+  echo "JUMPBOX_PUBLIC_IP    = ${jumpbox_ip:-<inconnu>}"
+
+  echo
+  echo "=== Connexion ==="
+  echo "Jumpbox (SSH, seul point d'entrée public) :"
+  echo "  ssh -i \"${JUMPBOX_SSH_KEY_PATH:-<JUMPBOX_SSH_KEY_PATH>}\" ${JUMPBOX_SSH_USER:-<JUMPBOX_SSH_USER>}@${jumpbox_ip:-<JUMPBOX_PUBLIC_IP>}"
+  echo
+  echo "dc01 (RDP, pas d'IP publique — tunnel via la jumpbox) :"
+  echo "  ssh -i \"${JUMPBOX_SSH_KEY_PATH:-<JUMPBOX_SSH_KEY_PATH>}\" -L 3389:${DC01_PRIVATE_IP:-<DC01_PRIVATE_IP>}:3389 ${JUMPBOX_SSH_USER:-<JUMPBOX_SSH_USER>}@${jumpbox_ip:-<JUMPBOX_PUBLIC_IP>}"
+  echo "  puis client RDP vers localhost:3389, identifiants DC01_ADMIN_USER/DC01_ADMIN_PASSWORD ci-dessus."
+}
+
 # find_goad_workspace_dir — chemin du dossier d'instance GOAD déployée
 # (GOAD/workspace/<instance-id>/), déterminé par le nom de son dossier
 # d'instance, pas connaissable à l'avance : goad.py choisit cet identifiant

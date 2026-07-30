@@ -65,7 +65,14 @@ refuse d'agir si ce n'est pas le cas.
 ./scripts/99-lifecycle.sh stop    # fin de session, économise les coûts Azure
 ./scripts/99-lifecycle.sh start   # reprise
 ./scripts/reset-goad.sh           # supprime le déploiement GOAD-Light en cours pour repartir de zéro
+./scripts/00-deploy.sh creds       # affiche tous les identifiants du lab
 ```
+
+Les secrets à révélation unique (mot de passe temporaire `sync-admin`,
+`GRAPH_CLIENT_SECRET`) sont enregistrés au moment de leur génération dans
+`config/credentials.local.txt` (jamais commité) : `creds` les affiche avec
+les valeurs re-découvrables à la demande (mot de passe `dc01`, clé SSH du
+jumpbox...).
 
 ## Pour aller plus loin
 
