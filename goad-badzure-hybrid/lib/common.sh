@@ -191,21 +191,28 @@ discover_rg_goad() {
 }
 
 # discover_rg_badzure — remplit $RG_BADZURE par auto-détection si absente de
-# lab.env, depuis terraform.tfvars.json de BadZure (généré par BadZure.py
-# build) : BadZure choisit des noms de resource group aléatoires à chaque
-# déploiement.
+# lab.env. Deux méthodes, dans l'ordre :
+# 1. terraform.tfvars.json de BadZure (généré par BadZure.py build) : précis,
+#    mais seulement présent si BadZure a été construit depuis ce clone.
+# 2. Repli Azure direct, utile si BadZure a été déployé depuis un autre
+#    clone/session (tfvars.json absent ici, mais les ressources existent
+#    réellement) : parmi les resource groups réels du compte, cherche celui
+#    dont le nom figure dans la liste de noms utilisée par BadZure
+#    (entity_data/resource-groups.txt) ET qui contient un VNet "<rg>-vnet"
+#    (BadZure/terraform/main.tf, azurerm_virtual_network.vm_vnets) — BadZure
+#    crée plusieurs resource groups par déploiement, un seul héberge le VNet
+#    nécessaire au peering.
 discover_rg_badzure() {
   if [[ -n "${RG_BADZURE:-}" ]]; then
     return 0
   fi
 
-  local tfvars="${BADZURE_DIR:-$(repo_root_dir)/BadZure}/terraform/terraform.tfvars.json"
-  if [[ ! -f "$tfvars" ]]; then
-    return 0
-  fi
+  local badzure_dir="${BADZURE_DIR:-$(repo_root_dir)/BadZure}"
+  local tfvars="${badzure_dir}/terraform/terraform.tfvars.json"
 
-  local rg
-  rg="$(python3 -c "
+  if [[ -f "$tfvars" ]]; then
+    local rg
+    rg="$(python3 -c "
 import json
 with open('$tfvars') as f:
     data = json.load(f)
@@ -213,11 +220,33 @@ rgs = list(data.get('resource_groups', {}).keys())
 print(rgs[0] if rgs else '')
 " 2>/dev/null)"
 
-  if [[ -n "$rg" ]]; then
-    log_info "RG_BADZURE non renseignée dans lab.env : auto-détectée = $rg"
-    RG_BADZURE="$rg"
-    export RG_BADZURE
+    if [[ -n "$rg" ]]; then
+      log_info "RG_BADZURE non renseignée dans lab.env : auto-détectée = $rg"
+      RG_BADZURE="$rg"
+      export RG_BADZURE
+      return 0
+    fi
   fi
+
+  local names_file="${badzure_dir}/entity_data/resource-groups.txt"
+  if [[ ! -f "$names_file" ]]; then
+    return 0
+  fi
+
+  local real_rgs
+  real_rgs="$(az group list --query "[].name" -o tsv 2>/dev/null)"
+
+  local candidate
+  while IFS= read -r candidate; do
+    [[ -z "$candidate" ]] && continue
+    if grep -qxF "$candidate" <<< "$real_rgs" \
+      && resource_exists network vnet show --name "${candidate}-vnet" --resource-group "$candidate"; then
+      log_info "RG_BADZURE non renseignée dans lab.env (terraform.tfvars.json absent) : auto-détectée via Azure = $candidate"
+      RG_BADZURE="$candidate"
+      export RG_BADZURE
+      return 0
+    fi
+  done < "$names_file"
 }
 
 # discover_goad_instance_details — remplit JUMPBOX_SSH_KEY_PATH,
