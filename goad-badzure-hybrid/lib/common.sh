@@ -242,7 +242,7 @@ show_credentials() {
   echo "  ssh -i \"${JUMPBOX_SSH_KEY_PATH:-<JUMPBOX_SSH_KEY_PATH>}\" ${JUMPBOX_SSH_USER:-<JUMPBOX_SSH_USER>}@${jumpbox_ip:-<JUMPBOX_PUBLIC_IP>}"
   echo
   echo "dc01 (RDP, pas d'IP publique — tunnel via la jumpbox) :"
-  echo "  ssh -i \"${JUMPBOX_SSH_KEY_PATH:-<JUMPBOX_SSH_KEY_PATH>}\" -L 3389:${DC01_PRIVATE_IP:-<DC01_PRIVATE_IP>}:3389 ${JUMPBOX_SSH_USER:-<JUMPBOX_SSH_USER>}@${jumpbox_ip:-<JUMPBOX_PUBLIC_IP>}"
+  echo "  ssh -N -L 3389:${DC01_PRIVATE_IP:-<DC01_PRIVATE_IP>}:3389 -i \"${JUMPBOX_SSH_KEY_PATH:-<JUMPBOX_SSH_KEY_PATH>}\" ${JUMPBOX_SSH_USER:-<JUMPBOX_SSH_USER>}@${jumpbox_ip:-<JUMPBOX_PUBLIC_IP>}"
   echo "  puis client RDP vers localhost:3389, identifiants DC01_ADMIN_USER/DC01_ADMIN_PASSWORD ci-dessus."
 }
 

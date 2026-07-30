@@ -1,8 +1,8 @@
 # Étapes manuelles : installation et validation d'Entra Connect
 
-Ce document couvre les étapes du déploiement qui ne peuvent pas être
-automatisées, parce qu'elles nécessitent un login interactif dans un
-navigateur (la Conditional Access du tenant bloque tout login scripté).
+Ce document couvre le wizard ABA et sa validation, qui ne peuvent pas être
+automatisés (la Conditional Access du tenant bloque tout login scripté dans
+un navigateur), ainsi que les prérequis à ne pas oublier avant de les lancer.
 
 Voir `README.md` pour la place de ces étapes dans l'ordre global.
 
@@ -25,23 +25,24 @@ sur l'exigence de changement de mot de passe au premier login.
 Le script crée aussi lui-même le service principal app-only nécessaire
 (`goad-badzure-hybrid-automation`) si `GRAPH_CLIENT_ID`/`GRAPH_CLIENT_SECRET`
 sont absents de `config/lab.env` : aucune étape manuelle requise pour ça. Le
-secret généré s'affiche une seule fois dans les logs, à noter immédiatement
-dans `config/lab.env` (un secret client Azure AD n'est jamais récupérable
-après coup). En cas de perte, relancer le script sans ces deux variables :
-il détecte le SP existant et en régénère un nouveau.
+secret généré est automatiquement écrit dans `config/lab.env` (plus rien à
+noter à la main). En cas de perte, relancer le script sans ces deux
+variables : il détecte le SP existant et en régénère un nouveau.
 
 ---
 
-## 1. Installation d'Entra Connect sur dc01
+## 1. Installation d'Entra Connect sur dc01 (automatisée)
 
-Télécharger et exécuter `AzureADConnect.msi` sur dc01 (accès via RDP,
-le canal WinRM de ce projet ne peut pas transférer un installeur de cette
-taille).
+`./scripts/00-deploy.sh link` télécharge et installe silencieusement
+`AzureADConnect.msi` sur dc01 (`scripts/35-install-entra-connect.sh`) : dc01
+télécharge lui-même l'installeur depuis internet (accès sortant vérifié
+fonctionnel) via une commande PowerShell, le canal WinRM de ce projet ne
+pouvant pas transférer un fichier aussi gros (~145 Mo). Rien de manuel ici.
 
-L'installation elle-même supporte le mode silencieux (`/quiet`), mais la
-configuration ABA (Azure AD Connect Authentication) qui suit passe
-obligatoirement par le wizard graphique : c'est le seul canal qui contourne
-la Conditional Access du tenant. Ne pas chercher à scripter cette partie.
+La configuration ABA (Azure AD Connect Authentication) qui suit passe en
+revanche obligatoirement par le wizard graphique : c'est le seul canal qui
+contourne la Conditional Access du tenant. Ne pas chercher à scripter cette
+partie.
 
 ## 2. Wizard ABA
 

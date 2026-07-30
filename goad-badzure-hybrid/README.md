@@ -40,7 +40,8 @@ cd ../BadZure && python3 BadZure.py build
 cd ../goad-badzure-hybrid && ./scripts/00-deploy.sh goad
 
 # 3. Relier GOAD et BadZure : peering réseau, règles NSG, création du compte
-#    sync-admin, hardening de dc01
+#    sync-admin, hardening de dc01, installation silencieuse d'Azure AD
+#    Connect sur dc01 (dc01 télécharge lui-même l'installeur)
 ./scripts/00-deploy.sh link
 ```
 
@@ -48,8 +49,9 @@ cd ../goad-badzure-hybrid && ./scripts/00-deploy.sh goad
 `https://myaccount.microsoft.com` avec le compte `sync-admin` et définir son
 mot de passe définitif (un mot de passe temporaire s'affiche dans les logs
 de l'étape 3) : sans ça, le wizard échoue. Ensuite, sur dc01 (accès RDP via
-le jumpbox), installer Entra Connect et suivre le wizard avec ce compte
-`sync-admin`. Détail complet dans `docs/manual-steps.md`.
+le jumpbox), suivre le wizard ABA d'Azure AD Connect (déjà installé) avec ce
+compte `sync-admin` — seule partie qui ne peut pas être automatisée
+(Conditional Access du tenant). Détail complet dans `docs/manual-steps.md`.
 
 ```bash
 # 5. Une fois la synchro vérifiée, débloquer les GPO
@@ -68,11 +70,11 @@ refuse d'agir si ce n'est pas le cas.
 ./scripts/00-deploy.sh creds       # affiche tous les identifiants du lab
 ```
 
-Les secrets à révélation unique (mot de passe temporaire `sync-admin`,
-`GRAPH_CLIENT_SECRET`) sont enregistrés au moment de leur génération dans
-`config/credentials.local.txt` (jamais commité) : `creds` les affiche avec
-les valeurs re-découvrables à la demande (mot de passe `dc01`, clé SSH du
-jumpbox...).
+Le mot de passe temporaire `sync-admin` (secret à révélation unique) est
+enregistré au moment de sa génération dans `config/credentials.local.txt`
+(jamais commité) : `creds` l'affiche avec les valeurs re-découvrables à la
+demande (mot de passe `dc01`, clé SSH du jumpbox...) et les commandes de
+connexion SSH/RDP prêtes à l'emploi.
 
 ## Pour aller plus loin
 

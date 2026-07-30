@@ -8,8 +8,10 @@
 #           est créée directement dans $REGION_JUMPBOX (cf.
 #           GOAD/template/provider/azure/jumpbox.tf), pas migrée après coup.
 #   link    Relie GOAD et BadZure : peering réseau, règles NSG, préparation
-#           Entra Connect, hardening dc01. S'arrête avant le wizard (étape
-#           manuelle) et affiche quoi faire ensuite.
+#           Entra Connect, hardening dc01, installation silencieuse d'Azure
+#           AD Connect. S'arrête avant le wizard ABA (seule étape vraiment
+#           manuelle, bloquée par la Conditional Access du tenant) et affiche
+#           quoi faire ensuite.
 #   finish  À lancer après le wizard : vérifie que la synchro est stable,
 #           puis débloque les GPO. Refuse de continuer si la synchro n'est
 #           pas confirmée.
@@ -32,6 +34,8 @@ source "${SCRIPT_DIR}/20-peer-networks.sh"
 source "${SCRIPT_DIR}/21-nsg-rules.sh"
 # shellcheck source=30-goad-hardening-fix.sh disable=SC1091
 source "${SCRIPT_DIR}/30-goad-hardening-fix.sh"
+# shellcheck source=35-install-entra-connect.sh disable=SC1091
+source "${SCRIPT_DIR}/35-install-entra-connect.sh"
 # shellcheck source=40-prepare-entra-connect.sh disable=SC1091
 source "${SCRIPT_DIR}/40-prepare-entra-connect.sh"
 # shellcheck source=50-goad-gpo-unblock.sh disable=SC1091
@@ -91,19 +95,22 @@ deploy_goad() {
 # deploy_link — relie GOAD et BadZure, s'arrête avant le wizard Entra
 # Connect (étape manuelle).
 deploy_link() {
-  log_info "=== 1/4 : peering réseau ==="
+  log_info "=== 1/5 : peering réseau ==="
   peer_networks || return 1
 
-  log_info "=== 2/4 : règles NSG ==="
+  log_info "=== 2/5 : règles NSG ==="
   apply_nsg_hardening || return 1
 
-  log_info "=== 3/4 : préparation Entra Connect (compte sync-admin) ==="
+  log_info "=== 3/5 : préparation Entra Connect (compte sync-admin) ==="
   prepare_entra_connect || return 1
 
-  log_info "=== 4/4 : hardening dc01 (blocage GPO + crypto fix) ==="
+  log_info "=== 4/5 : hardening dc01 (blocage GPO + crypto fix) ==="
   apply_hardening_fix || return 1
 
-  log_info "Terminé. Étape manuelle suivante : installer Entra Connect et suivre le wizard sur dc01 (cf. docs/manual-steps.md). Lancer '$0 finish' une fois la synchro validée."
+  log_info "=== 5/5 : installation silencieuse d'Azure AD Connect sur dc01 ==="
+  install_entra_connect || return 1
+
+  log_info "Terminé. Étape manuelle suivante : wizard ABA sur dc01 en RDP (cf. docs/manual-steps.md). Lancer '$0 finish' une fois la synchro validée."
 }
 
 # check_sync_stable — pré-vérification avant de débloquer les GPO : ouvre

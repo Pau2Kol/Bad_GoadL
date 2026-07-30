@@ -71,3 +71,21 @@ python3 run_provisioning.py
 Remplacer `<instance>` par l'identifiant d'instance GOAD (nom du dossier
 sous `workspace/`) et `<IP publique actuelle du jumpbox>` par sa vraie IP
 (`az vm show --name ubuntu-jumpbox -d --query publicIps -o tsv`).
+
+## Le wizard Azure AD Connect échoue avec "Incorrect version of TLS"
+
+**Symptôme** : le wizard affiche "Incorrect version of TLS : TLS 1.2 is not
+configured on this server" dès son lancement sur dc01.
+
+**Cause** : TLS 1.2 (SCHANNEL + `SchUseStrongCrypto` .NET Framework) n'est
+jamais activé par défaut sur l'image Windows Server utilisée par GOAD, même
+si l'OS le supporte nativement.
+
+**Ce cas est géré automatiquement** par `./scripts/00-deploy.sh link`
+(`scripts/35-install-entra-connect.sh` → `powershell/enable-tls12.ps1`,
+avant l'installation elle-même) : si un redémarrage de dc01 est nécessaire
+(SCHANNEL chargé au boot), le script le déclenche et attend que WinRM
+réponde de nouveau avant de continuer. Si le wizard échoue quand même avec
+cette erreur (ex. wizard relancé bien après `link`, ou dc01 modifié
+entre-temps), relancer `powershell/enable-tls12.ps1` sur dc01 (WinRM) puis
+redémarrer dc01 avant de relancer le wizard.
