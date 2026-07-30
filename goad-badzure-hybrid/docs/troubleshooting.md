@@ -79,7 +79,7 @@ sous `workspace/`) et `<IP publique actuelle du jumpbox>` par sa vraie IP
 BadZure et GOAD sont bien déployés.
 
 **Cause** : ces variables sont auto-détectées (voir
-`config/lab.env.example`), mais la détection échoue si plusieurs instances
+`config/lab.env`), mais la détection échoue si plusieurs instances
 GOAD existent dans `GOAD/workspace/` (ambigu, aucune n'est choisie
 automatiquement) ou si `BadZure/terraform/terraform.tfvars.json` est absent.
 

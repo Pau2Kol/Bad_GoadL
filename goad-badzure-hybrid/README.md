@@ -20,16 +20,11 @@ cycle de vie).
 - `ssh`.
 - `terraform`.
 
-## Installation
-
-```bash
-cp config/lab.env.example config/lab.env
-```
-
-Rien à remplir : tout est auto-détecté (compte az actif, régions par
-défaut, ressources créées par BadZure/GOAD au fur et à mesure du
-déploiement). Une valeur explicite dans `config/lab.env` reste toujours
-prioritaire sur l'auto-détection.
+Rien à installer ni à configurer avant de déployer : `config/lab.env` est
+suivi directement dans le dépôt, vide, et tout est auto-détecté (compte az
+actif, régions par défaut, ressources créées par BadZure/GOAD au fur et à
+mesure du déploiement). Une valeur explicite dans `config/lab.env` reste
+toujours prioritaire sur l'auto-détection.
 
 ## Déployer le lab de zéro
 

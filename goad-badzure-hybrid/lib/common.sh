@@ -47,9 +47,11 @@ parse_common_flags() {
   done
 }
 
-# load_lab_env [chemin] — source config/lab.env (par défaut : lab.env à côté de
-# lab.env.example, résolu relativement à ce fichier). Échoue proprement si absent,
-# plutôt que de laisser les scripts tourner avec des variables vides.
+# load_lab_env [chemin] — source config/lab.env (par défaut : lab.env, résolu
+# relativement à ce fichier). Suivi directement dans le dépôt (vide, tout est
+# auto-détecté) : sa présence après un clone est donc garantie. Échoue
+# proprement si absent (supprimé à la main), plutôt que de laisser les
+# scripts tourner avec des variables vides.
 load_lab_env() {
   local env_file="${1:-}"
   if [[ -z "$env_file" ]]; then
@@ -59,7 +61,7 @@ load_lab_env() {
   fi
 
   if [[ ! -f "$env_file" ]]; then
-    log_error "Fichier d'environnement introuvable : $env_file (copier config/lab.env.example vers config/lab.env et le renseigner)"
+    log_error "Fichier d'environnement introuvable : $env_file (restaurer avec git checkout config/lab.env — rien à y renseigner, tout est auto-détecté)"
     return 1
   fi
 

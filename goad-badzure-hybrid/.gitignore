@@ -8,8 +8,10 @@
 .terraform.lock.hcl
 
 # Configuration locale contenant des secrets (tenant_id, subscription_id, IP, mots de passe...)
+# config/lab.env fait exception : suivi directement (rien à y renseigner,
+# tout est auto-détecté ou par défaut, cf. lib/common.sh).
 *.env
-config/lab.env
+!config/lab.env
 
 # Credentials / clés / certificats
 *credential*
